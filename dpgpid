@@ -1,0 +1,62 @@
+#!/bin/sh
+# link: https://git.p2p.legal/aya/dpgpid/
+# desc: dpgpid (Decentralized PGP IDentifiers) shares PGP keys with DIDs on IPFS
+# Copyright (C) 2022 Yann "aya" Autissier
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+set -eu
+
+USAGE='[--help] [--version] show'
+VERSION='0.0.1'
+
+dpgpid() {
+  while test $# != 0; do
+    case "$1" in
+    -h|--help)
+      help
+      ;;
+    -v|--version)
+      version
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      usage
+      ;;
+    show)
+      show
+      ;;
+    *)
+      break
+      ;;
+    esac
+    shift
+  done
+}
+
+help() {
+  usage
+}
+
+show() {
+  gpg --list-keys --with-colons |awk -F: '$1 == "pub" {print "did:pgp:"$5}'
+}
+
+usage() {
+  printf "%s\n" "Usage: $(basename "$0") ${USAGE}"
+}
+
+version() {
+  printf "%s\n" "Version: $(basename "$0") v${VERSION}"
+}
+
+dpgpid "$@"
