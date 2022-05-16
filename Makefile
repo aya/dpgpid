@@ -5,7 +5,7 @@ BINDIR ?= $(PREFIX)/bin
 
 default: tests
 
-all: tests install
+all: install tests
 
 install:
 	mkdir -p "$(BINDIR)"

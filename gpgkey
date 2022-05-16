@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+# link: https://git.p2p.legal/aya/dpgpid/
+# desc: gpgkey converts ed25519 gpg keys to match duniter and ipfs format
+
+# Copyleft 2022 Yann Autissier <aya@asycn.io>
+# all crypto science belongs to Pascal Engélibert <tuxmain@zettascript.org>
+# coming from files available at https://git.p2p.legal/qo-op/Astroport.ONE/tools
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+import argparse
+import base58
+import base64
+import configparser
+import crypto_pb2
+import cryptography.hazmat.primitives.asymmetric.ed25519 as ed25519
+from cryptography.hazmat.primitives import serialization
+import duniterpy.key
+import logging as log
+import os
+import re
+import sys
+import time
+
+__version__='0.0.1'
+
+class gpgkey:
+    def __init__(self):
+        self.parser = argparse.ArgumentParser()
+        self.parser.add_argument(
+            "-d",
+            "--debug",
+            action="store_true",
+            help="show debug informations",
+        )
+        self.parser.add_argument(
+            "-i",
+            "--input",
+            dest="input",
+            default=None,
+            help="read credentials from file INPUT",
+        )
+        self.parser.add_argument(
+            "-q",
+            "--quiet",
+            action="store_true",
+            help="show only errors",
+        )
+        self.parser.add_argument(
+            "-o",
+            "--output",
+            dest="output",
+            default=None,
+            help="write keys to file OUTPUT",
+        )
+        self.parser.add_argument(
+            "-v",
+            "--verbose",
+            action="store_true",
+            help="show more informations",
+        )
+        self.parser.add_argument(
+            "--version",
+            action="store_true",
+            help="show version and exit",
+        )
+        self.parser.add_argument(
+            'command',
+            help="duniter|ipfs",
+            nargs="?",
+        )
+        self.parser.add_argument(
+            'username',
+            nargs="?",
+        )
+        self.parser.add_argument(
+            'password',
+            nargs="?",
+        )
+
+    def _check_args(self):
+        log.debug("func gpgkey._check_args(self)")
+        log.debug("var self.command: %s" % self.command)
+        log.debug("var self.username: %s" % self.username)
+        log.debug("var self.password: %s" % self.password)
+        if self.command:
+            if self.input is None:
+                if self.password is None or self.username is None:
+                    self.parser.error(f"{self.command} requires an input file or username and password args")
+
+    def _invalid_command(self):
+        log.debug("func gpgkey._invalid_command(self)")
+        self.parser.error(f"{self.command} is not a valid command.")
+
+    def _load_config(self):
+        log.debug("func gpgkey._load_config(self)")
+        self.config = configparser.RawConfigParser()
+        config_dir = os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config')), 'dpgpid')
+        log.debug("var config_dir: %s" % config_dir)
+        self.config.read( [config_dir + '/gpgkey.conf'] )
+
+    def do_duniter(self):
+        log.debug("func gpgkey.do_duniter(self)")
+        self.duniterpy_from_salt_and_password()
+        print(self.duniterpy.pubkey)
+        if self.output is not None:
+            self.duniterpy.save_pubsec_file(self.output)
+            os.chmod(self.output, 0o600)
+
+    def do_ipfs(self):
+        log.info("func do_ipfs(self)")
+        if self.input is None:
+            self.duniterpy_from_salt_and_password()
+            self.ipfs_base58_shared_key=self.duniterpy.pubkey
+            self.ipfs_base58_secure_key=base58.b58encode(self.duniterpy.sk)
+        else:
+            for line in open(self.input, "r"):
+                if re.search("pub", line):
+                    self.ipfs_base58_shared_key=line.replace('\n','').split(': ')[1]
+                elif re.search("sec", line):
+                    self.ipfs_base58_secure_key=line.replace('\n','').split(': ')[1]
+
+        self.ipfs_from_ed25519_key()
+        print('PeerID={}'.format(self.ipfs_peerid))
+        print('PrivKEY={}'.format(self.ipfs_privkey))
+
+    def duniterpy_from_salt_and_password(self):
+        log.debug("func gpgkey.duniterpy_from_salt_and_password(self)")
+        scrypt_params = duniterpy.key.scrypt_params.ScryptParams(
+            int(self.config.get('scrypt', 'n')) if self.config.has_option('scrypt', 'n') else 4096,
+            int(self.config.get('scrypt', 'r')) if self.config.has_option('scrypt', 'r') else 16,
+            int(self.config.get('scrypt', 'p')) if self.config.has_option('scrypt', 'p') else 1,
+            int(self.config.get('scrypt', 'sl')) if self.config.has_option('scrypt', 'sl') else 32,
+        )
+        self.duniterpy = duniterpy.key.SigningKey.from_credentials(
+            self.username,
+            self.password,
+            scrypt_params
+        )
+
+    def ipfs_from_ed25519_key(self):
+        log.info("func ipfs_from_ed25519_key(self)")
+
+        # Decoding keys
+        decoded_shared = base58.b58decode(self.ipfs_base58_shared_key)
+        decoded_secure = base58.b58decode(self.ipfs_base58_secure_key)
+        ipfs_shared = ed25519.Ed25519PublicKey.from_public_bytes(decoded_shared)
+        ipfs_secure = ed25519.Ed25519PrivateKey.from_private_bytes(decoded_secure[:32])
+        ipfs_shared_bytes = ipfs_shared.public_bytes(encoding=serialization.Encoding.Raw,
+                                                     format=serialization.PublicFormat.Raw)
+        ipfs_secure_bytes = ipfs_secure.private_bytes(encoding=serialization.Encoding.Raw,
+                                                      format=serialization.PrivateFormat.Raw,
+                                                      encryption_algorithm=serialization.NoEncryption())
+
+        # Formulating PeerID
+        ipfs_pid = base58.b58encode(b'\x00$\x08\x01\x12 ' + ipfs_shared_bytes)
+        PeerID = ipfs_pid.decode('ascii')
+        self.ipfs_peerid = ipfs_pid.decode('ascii')
+
+        # Serializing private key in IPFS-native mode, the private key contains public one
+        pkey = crypto_pb2.PrivateKey()
+        #pkey.Type = crypto_pb2.KeyType.Ed25519
+        pkey.Type = 1
+        pkey.Data = ipfs_secure_bytes + ipfs_shared_bytes
+        PrivKey = base64.b64encode(pkey.SerializeToString()).decode('ascii')
+        self.ipfs_privkey = base64.b64encode(pkey.SerializeToString()).decode('ascii')
+
+    def run(self, argv):
+        args = self.parser.parse_args(argv)
+        vars(self).update(vars(args))
+
+        # display version
+        if args.version:
+            version()
+            sys.exit()
+
+        # define log format
+        log_format='%(asctime)s %(levelname)s: %(message)s'
+        log_datefmt='%Y/%m/%d %H:%M:%S'
+        if args.debug:
+            log_level='DEBUG'
+        elif args.quiet:
+            log_level='ERROR'
+        elif args.verbose:
+            log_level='INFO'
+        else:
+            log_level='WARNING'
+        log.basicConfig(format=log_format, datefmt=log_datefmt, level=log_level)
+
+        self._check_args()
+        self._load_config()
+        method = getattr(self, f'do_{self.command}', self._invalid_command)
+        return method()
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+
+    cli = gpgkey()
+    return cli.run(argv)
+
+def version(version=__version__):
+    print("%s v%s" % (sys.argv[0],version))
+
+if __name__ == "__main__":
+    sys.exit(main())
