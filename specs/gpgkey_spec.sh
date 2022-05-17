@@ -2,7 +2,13 @@
 set -eu
 
 gpgkey() {
-  ./gpgkey "$@"
+  if [ -x ./gpgkey ]; then
+    ./gpgkey "$@"
+  elif [ -x ./bin/gpgkey ]; then
+    ./bin/gpgkey "$@"
+  else
+    gpgkey "$@"
+  fi
 }
 
 Describe 'Dependency'

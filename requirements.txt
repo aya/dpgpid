@@ -1,0 +1,7 @@
+argparse
+base58
+configparser
+cryptography
+duniterpy
+google
+protobuf

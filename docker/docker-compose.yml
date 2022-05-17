@@ -1,0 +1,22 @@
+version: '3.6'
+
+services:
+  dpgpid:
+    build:
+      args:
+      - DOCKER_BUILD_DIR=docker/dpgpid
+      - GID=${GID}
+      - UID=${UID}
+      - USER=${USER}
+      context: ..
+      dockerfile: docker/dpgpid/Dockerfile
+    command: tail -f /dev/null
+    image: ${DOCKER_REPOSITORY}/dpgpid:${DOCKER_IMAGE_TAG}
+    networks:
+    - private
+    restart: always
+
+networks:
+  private:
+    external: true
+    name: ${DOCKER_NETWORK_PRIVATE}

@@ -1,3 +1,5 @@
+-include $(if $(MYOS),$(MYOS),../myos)/make/include.mk
+
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 

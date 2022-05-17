@@ -2,7 +2,13 @@
 set -eu
 
 dpgpid() {
-  ./dpgpid "$@"
+  if [ -x ./dpgpid ]; then
+    ./dpgpid "$@"
+  elif [ -x ./bin/dpgpid ]; then
+    ./bin/dpgpid "$@"
+  else
+    dpgpid "$@"
+  fi
 }
 
 Describe 'Dependency'
