@@ -12,26 +12,18 @@ dpgpid() {
 }
 
 Describe 'Dependency'
-  Describe 'awk'
+  Describe 'gpg:'
     It 'is available'
-      When run which awk
-      The output should include "/awk"
+      When run gpg --help
+      The output should include "gpg"
       The status should be success
       The stderr should equal ""
     End
   End
-  Describe 'gpg'
+  Describe 'ipfs:'
     It 'is available'
-      When run which gpg
-      The output should include "/gpg"
-      The status should be success
-      The stderr should equal ""
-    End
-  End
-  Describe 'ipfs'
-    It 'is available'
-      When run which ipfs
-      The output should include "/ipfs"
+      When run ipfs --help
+      The output should include "ipfs"
       The status should be success
       The stderr should equal ""
     End
@@ -39,7 +31,7 @@ Describe 'Dependency'
 End
 
 Describe 'dpgpid'
-  Describe '--help'
+  Describe '--help:'
     It 'prints help'
       When run dpgpid --help
       The output should include 'Usage:'
@@ -47,7 +39,7 @@ Describe 'dpgpid'
       The stderr should equal ""
     End
   End
-  Describe '--version'
+  Describe '--version:'
     It 'prints version'
       When run dpgpid --version
       The output should include 'v0.0.1'

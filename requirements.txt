@@ -1,7 +1,7 @@
-argparse
 base58
-configparser
 cryptography
 duniterpy
 google
+pgpy
 protobuf
+pynacl

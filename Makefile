@@ -1,4 +1,5 @@
--include $(if $(MYOS),$(MYOS),../myos)/make/include.mk
+MYOS ?= ../myos
+-include $(MYOS)/make/include.mk
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
@@ -14,7 +15,7 @@ install:
 	install dpgpid "$(BINDIR)/dpgpid"
 
 shellcheck-%:
-	shellcheck $*/*
+	shellcheck $*/*.sh
 
 shellspec-%:
 	shellspec -f tap $*

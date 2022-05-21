@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 # link: https://git.p2p.legal/aya/dpgpid/
-# desc: gpgkey converts ed25519 gpg keys to match duniter and ipfs format
+# desc: gpgkey converts ed25519 gpg keys to ed25519 duniter and ipfs keys
 
 # Copyleft 2022 Yann Autissier <aya@asycn.io>
 # all crypto science belongs to Pascal Engélibert <tuxmain@zettascript.org>
 # coming from files available at https://git.p2p.legal/qo-op/Astroport.ONE/tools
+# gpgme stuff has been provided by Ben McGinnes
+# and comes from http://files.au.adversary.org/crypto/gpgme-python-howto.html
+# gpg key extraction is taken from work of Simon Vareille available at
+# https://gist.github.com/SimonVareille/fda49baf5f3e15b5c88e25560aeb2822
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -27,9 +31,13 @@ import crypto_pb2
 import cryptography.hazmat.primitives.asymmetric.ed25519 as ed25519
 from cryptography.hazmat.primitives import serialization
 import duniterpy.key
+import gpg
+import nacl.bindings
+import pgpy
 import logging as log
 import os
 import re
+import struct
 import sys
 import time
 
@@ -80,8 +88,7 @@ class gpgkey:
             help="duniter|ipfs",
             nargs="?",
         )
-        self.parser.add_argument(
-            'username',
+        self.parser.add_argument( 'username',
             nargs="?",
         )
         self.parser.add_argument(
@@ -90,53 +97,113 @@ class gpgkey:
         )
 
     def _check_args(self):
-        log.debug("func gpgkey._check_args(self)")
-        log.debug("var self.command: %s" % self.command)
-        log.debug("var self.username: %s" % self.username)
-        log.debug("var self.password: %s" % self.password)
+        log.debug("def gpgkey._check_args(self)")
+        log.debug("self.command=%s" % self.command)
+        log.debug("self.username=%s" % self.username)
+        log.debug("self.password=%s" % self.password)
         if self.command:
             if self.input is None:
                 if self.password is None or self.username is None:
                     self.parser.error(f"{self.command} requires an input file or username and password args")
 
     def _invalid_command(self):
-        log.debug("func gpgkey._invalid_command(self)")
+        log.debug("def gpgkey._invalid_command(self)")
         self.parser.error(f"{self.command} is not a valid command.")
 
     def _load_config(self):
-        log.debug("func gpgkey._load_config(self)")
+        log.debug("def gpgkey._load_config(self)")
         self.config = configparser.RawConfigParser()
         config_dir = os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config')), 'dpgpid')
-        log.debug("var config_dir: %s" % config_dir)
+        log.debug("config_dir=%s" % config_dir)
         self.config.read( [config_dir + '/gpgkey.conf'] )
 
+    def base58_from_ed25519(self):
+        log.debug("def gpgkey.base58_from_ed25519(self)")
+        self.base58_public_key = base58.b58encode(self.ed25519_public_key).decode('ascii')
+        self.base58_secret_key = base58.b58encode(self.ed25519_secret_key).decode('ascii')
+        log.debug("self.base58_public_key=%s" % self.base58_public_key)
+        log.debug("self.base58_secret_key=%s" % self.base58_secret_key)
+
     def do_duniter(self):
-        log.debug("func gpgkey.do_duniter(self)")
+        log.debug("def gpgkey.do_duniter(self)")
         self.duniterpy_from_salt_and_password()
-        print(self.duniterpy.pubkey)
-        if self.output is not None:
-            self.duniterpy.save_pubsec_file(self.output)
+        self.ed25519_from_duniterpy()
+        self.base58_from_ed25519()
+        if self.output is None:
+            print("pub: %s" % self.base58_public_key)
+            print("sec: %s" % self.base58_secret_key)
+        else:
+            with open(self.output, "w") as fh:
+                fh.write(f"""Type: PubSec
+Version: 1
+pub: {self.base58_public_key}
+sec: {self.base58_secret_key}
+"""
+                )
             os.chmod(self.output, 0o600)
 
     def do_ipfs(self):
-        log.info("func do_ipfs(self)")
+        log.debug("def gpgkey.do_ipfs(self)")
         if self.input is None:
             self.duniterpy_from_salt_and_password()
-            self.ipfs_base58_shared_key=self.duniterpy.pubkey
-            self.ipfs_base58_secure_key=base58.b58encode(self.duniterpy.sk)
+            self.ed25519_from_duniterpy()
+            self.base58_from_ed25519()
         else:
             for line in open(self.input, "r"):
                 if re.search("pub", line):
-                    self.ipfs_base58_shared_key=line.replace('\n','').split(': ')[1]
+                    self.base58_public_key = line.replace('\n','').split(': ')[1]
                 elif re.search("sec", line):
-                    self.ipfs_base58_secure_key=line.replace('\n','').split(': ')[1]
+                    self.base58_secret_key = line.replace('\n','').split(': ')[1]
+            self.ed25519_from_base58()
+        self.ipfs_from_ed25519()
+        if self.output is None:
+            print("PeerID: %s" % self.ipfs_peerid)
+            print("PrivKEY: %s" % self.ipfs_privkey)
+        else:
+            with open(self.output, "w") as fh:
+                fh.write(f"""Type: PubSec
+Version: 1
+pub: {self.base58_public_key}
+sec: {self.base58_secret_key}
+PeerID: {self.ipfs_peerid}
+PrivKEY: {self.ipfs_privkey}
+"""
+                )
+            os.chmod(self.output, 0o600)
 
-        self.ipfs_from_ed25519_key()
-        print('PeerID={}'.format(self.ipfs_peerid))
-        print('PrivKEY={}'.format(self.ipfs_privkey))
+    def do_pgp(self):
+        log.debug("def gpgkey.do_pgp(self)")
+        keys = self.gpg.keylist(pattern=self.username)
+        pubkeys = list(self.gpg.keylist(pattern=None, secret=False))
+        seckeys = list(self.gpg.keylist(pattern=None, secret=True))
+        self.armored_pgp_public_key = self.gpg.key_export(self.username)
+        self.armored_pgp_secret_key = self.gpg.key_export_secret(self.username)
+        log.debug("self.armored_pgp_public_key=%s" % self.armored_pgp_public_key)
+        log.debug("self.armored_pgp_secret_key=%s" % self.armored_pgp_secret_key)
+        self.pgpy, _ = pgpy.PGPKey.from_blob(self.armored_pgp_secret_key)
+        log.debug("self.pgpy.fingerprint.keyid=%s" % self.pgpy.fingerprint.keyid)
+        self.ed25519_from_pgpy()
+        self.base58_from_ed25519()
+        self.ipfs_from_ed25519()
+        if self.output is None:
+            print("pub: %s" % self.base58_public_key)
+            print("sec: %s" % self.base58_secret_key)
+            print("PeerID: %s" % self.ipfs_peerid)
+            print("PrivKEY: %s" % self.ipfs_privkey)
+        else:
+            with open(self.output, "w") as fh:
+                fh.write(f"""Type: PubSec
+Version: 1
+pub: {self.base58_public_key}
+sec: {self.base58_secret_key}
+PeerID: {self.ipfs_peerid}
+PrivKEY: {self.ipfs_privkey}
+"""
+                )
+            os.chmod(self.output, 0o600)
 
     def duniterpy_from_salt_and_password(self):
-        log.debug("func gpgkey.duniterpy_from_salt_and_password(self)")
+        log.debug("def gpgkey.duniterpy_from_salt_and_password(self)")
         scrypt_params = duniterpy.key.scrypt_params.ScryptParams(
             int(self.config.get('scrypt', 'n')) if self.config.has_option('scrypt', 'n') else 4096,
             int(self.config.get('scrypt', 'r')) if self.config.has_option('scrypt', 'r') else 16,
@@ -149,14 +216,33 @@ class gpgkey:
             scrypt_params
         )
 
-    def ipfs_from_ed25519_key(self):
-        log.info("func ipfs_from_ed25519_key(self)")
+    def ed25519_from_base58(self):
+        log.debug("def gpgkey.ed25519_from_base58(self)")
+        self.ed25519_public_key = base58.b58decode(self.base58_public_key)
+        self.ed25519_secret_key = base58.b58decode(self.base58_secret_key)
+        log.debug("self.ed25519_public_key=%s" % self.ed25519_public_key)
+        log.debug("self.ed25519_secret_key=%s" % self.ed25519_secret_key)
+
+    def ed25519_from_duniterpy(self):
+        log.debug("def gpgkey.ed25519_from_duniterpy(self)")
+        self.ed25519_public_key = base58.b58decode(self.duniterpy.pubkey)
+        self.ed25519_secret_key = self.duniterpy.sk
+        log.debug("self.ed25519_public_key=%s" % self.ed25519_public_key)
+        log.debug("self.ed25519_secret_key=%s" % self.ed25519_secret_key)
+
+    def ed25519_from_pgpy(self):
+        log.debug("def gpgkey.ed25519_from_pgpy(self)")
+        self.pgpy_key_seed()
+        self.ed25519_public_key, self.ed25519_secret_key = nacl.bindings.crypto_sign_seed_keypair(self.pgpy_key_seed)
+        log.debug("self.ed25519_public_key=%s" % self.ed25519_public_key)
+        log.debug("self.ed25519_secret_key=%s" % self.ed25519_secret_key)
+
+    def ipfs_from_ed25519(self):
+        log.debug("def ipfs_from_ed25519(self)")
 
         # Decoding keys
-        decoded_shared = base58.b58decode(self.ipfs_base58_shared_key)
-        decoded_secure = base58.b58decode(self.ipfs_base58_secure_key)
-        ipfs_shared = ed25519.Ed25519PublicKey.from_public_bytes(decoded_shared)
-        ipfs_secure = ed25519.Ed25519PrivateKey.from_private_bytes(decoded_secure[:32])
+        ipfs_shared = ed25519.Ed25519PublicKey.from_public_bytes(self.ed25519_public_key)
+        ipfs_secure = ed25519.Ed25519PrivateKey.from_private_bytes(self.ed25519_secret_key[:32])
         ipfs_shared_bytes = ipfs_shared.public_bytes(encoding=serialization.Encoding.Raw,
                                                      format=serialization.PublicFormat.Raw)
         ipfs_secure_bytes = ipfs_secure.private_bytes(encoding=serialization.Encoding.Raw,
@@ -165,7 +251,6 @@ class gpgkey:
 
         # Formulating PeerID
         ipfs_pid = base58.b58encode(b'\x00$\x08\x01\x12 ' + ipfs_shared_bytes)
-        PeerID = ipfs_pid.decode('ascii')
         self.ipfs_peerid = ipfs_pid.decode('ascii')
 
         # Serializing private key in IPFS-native mode, the private key contains public one
@@ -173,8 +258,62 @@ class gpgkey:
         #pkey.Type = crypto_pb2.KeyType.Ed25519
         pkey.Type = 1
         pkey.Data = ipfs_secure_bytes + ipfs_shared_bytes
-        PrivKey = base64.b64encode(pkey.SerializeToString()).decode('ascii')
         self.ipfs_privkey = base64.b64encode(pkey.SerializeToString()).decode('ascii')
+        log.debug("self.ipfs_peerid=%s" % self.ipfs_peerid)
+        log.debug("self.ipfs_privkey=%s" % self.ipfs_privkey)
+
+    def pgpy_key_flags(self):
+        log.debug("def gpgkey.pgpy_key_flags(self)")
+        flags = []
+        strs = {pgpy.constants.KeyFlags.Certify : 'C',
+                pgpy.constants.KeyFlags.Sign : 'S',
+                pgpy.constants.KeyFlags.EncryptCommunications : 'E',
+                pgpy.constants.KeyFlags.Authentication : 'A'}
+        for sig in self.pgpy.self_signatures:
+            if not sig.is_expired:
+                flags += sig.key_flags
+        self.pgpy_key_flags = "".join(strs.get(flag, '') for flag in flags)
+
+    def pgpy_key_seed(self):
+        log.debug("def gpgkey.pgpy_key_seed(self)")
+        self.pgpy_key_type()
+        # todo : unlock password protected key
+        # todo : choose a custom seed for RSA
+        assert self.pgpy.is_unlocked
+        if self.pgpy_key_type == 'RSA.disabled':
+            p = long_to_bytes(self.pgpy._key.keymaterial.p)
+            q = long_to_bytes(self.pgpy._key.keymaterial.q)
+            self.pgpy_key_value = "".join([f"{c:02x}" for c in p]) + "".join([f"{c:02x}" for c in q])
+            self.pgpy_key_size = (len(p) + len(q)) * 8
+            log.debug("self.pgpy_key_value=%s" % self.pgpy_key_value)
+            log.debug("self.pgpy_key_size=%s" % self.pgpy_key_size)
+        elif self.pgpy_key_type in ('ECDSA', 'EdDSA', 'ECDH'):
+            self.pgpy_key_seed = long_to_bytes(self.pgpy._key.keymaterial.s)
+            self.pgpy_key_value = "".join([f"{c:02x}" for c in self.pgpy_key_seed])
+            self.pgpy_key_size = len(self.pgpy_key_seed)*8
+            log.debug("self.pgpy_key_seed=%s" % self.pgpy_key_seed)
+            log.debug("self.pgpy_key_value=%s" % self.pgpy_key_value)
+            log.debug("self.pgpy_key_size=%s" % self.pgpy_key_size)
+        else:
+            raise NotImplementedError(f"Get seed from {self.pgpy_key_type} key is not supported")
+
+    def pgpy_key_type(self):
+        log.debug("def gpgkey.pgpy_key_type(self)")
+        if isinstance(self.pgpy._key.keymaterial, pgpy.packet.fields.RSAPriv):
+            self.pgpy_key_type = 'RSA'
+        elif isinstance(self.pgpy._key.keymaterial, pgpy.packet.fields.DSAPriv):
+            self.pgpy_key_type = 'DSA'
+        elif isinstance(self.pgpy._key.keymaterial, pgpy.packet.fields.ElGPriv):
+            self.pgpy_key_type = 'ElGamal'
+        elif isinstance(self.pgpy._key.keymaterial, pgpy.packet.fields.ECDSAPriv):
+            self.pgpy_key_type = 'ECDSA'
+        elif isinstance(self.pgpy._key.keymaterial, pgpy.packet.fields.EdDSAPriv):
+            self.pgpy_key_type = 'EdDSA'
+        elif isinstance(self.pgpy._key.keymaterial, pgpy.packet.fields.ECDHPriv):
+            self.pgpy_key_type = 'ECDH'
+        else:
+            self.pgpy_key_type = 'undefined'
+        log.debug("self.pgpy_key_type=%s" % self.pgpy_key_type)
 
     def run(self, argv):
         args = self.parser.parse_args(argv)
@@ -200,8 +339,58 @@ class gpgkey:
 
         self._check_args()
         self._load_config()
+        # self.gpg = gpg.Context(armor=True, offline=True, homedir=GNUPGHOME)
+        self.gpg = gpg.Context(armor=True, offline=True)
         method = getattr(self, f'do_{self.command}', self._invalid_command)
         return method()
+
+# long_to_bytes comes from PyCrypto, which is released into Public Domain
+# https://github.com/dlitz/pycrypto/blob/master/lib/Crypto/Util/number.py
+
+def bytes_to_long(s):
+    """bytes_to_long(string) : long
+    Convert a byte string to a long integer.
+    This is (essentially) the inverse of long_to_bytes().
+    """
+    acc = 0
+    unpack = struct.unpack
+    length = len(s)
+    if length % 4:
+        extra = (4 - length % 4)
+        s = b'\000' * extra + s
+        length = length + extra
+    for i in range(0, length, 4):
+        acc = (acc << 32) + unpack('>I', s[i:i+4])[0]
+    return acc
+
+def long_to_bytes(n, blocksize=0):
+    """long_to_bytes(n:long, blocksize:int) : string
+    Convert a long integer to a byte string.
+    If optional blocksize is given and greater than zero, pad the front of the
+    byte string with binary zeros so that the length is a multiple of
+    blocksize.
+    """
+    # after much testing, this algorithm was deemed to be the fastest
+    s = b''
+    n = int(n)
+    pack = struct.pack
+    while n > 0:
+        s = pack('>I', n & 0xffffffff) + s
+        n = n >> 32
+    # strip off leading zeros
+    for i in range(len(s)):
+        if s[i] != b'\000'[0]:
+            break
+    else:
+        # only happens when n == 0
+        s = b'\000'
+        i = 0
+    s = s[i:]
+    # add back some pad bytes.  this could be done more efficiently w.r.t. the
+    # de-padding being done above, but sigh...
+    if blocksize > 0 and len(s) % blocksize:
+        s = (blocksize - len(s) % blocksize) * b'\000' + s
+    return s
 
 def main(argv=None):
     if argv is None:

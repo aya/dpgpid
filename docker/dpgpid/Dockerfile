@@ -9,44 +9,51 @@ ARG PYTHON_RELEASE=3.10
 
 WORKDIR /opt/dpgpid
 COPY requirements.txt ./
-RUN apk add --no-cache --virtual .build-deps \
-    g++ \
+RUN apk upgrade --no-cache \
+ && apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/ --virtual .build-deps \
+    build-base \
     libffi-dev \
     protobuf \
+    py3-gpgme \
+    swig \
  && /usr/local/bin/python${PYTHON_RELEASE} -m venv ./ \
  && ./bin/pip${PYTHON_RELEASE} install -U pip wheel \
  && ./bin/pip${PYTHON_RELEASE} install -r ./requirements.txt \
  && wget https://github.com/libp2p/go-libp2p-core/raw/master/crypto/pb/crypto.proto \
  && protoc --python_out=./lib/python${PYTHON_RELEASE}/site-packages/ crypto.proto \
+ && cp -a /usr/lib/python${PYTHON_RELEASE}/site-packages/gpg ./lib/python${PYTHON_RELEASE}/site-packages/ \
  && rm -rf /root/.cache ./build ./crypto.proto \
  && apk del --no-network .build-deps \
- && find ./lib -type f -executable \
-     -exec scanelf --needed --nobanner --format '%n#p' '{}' ';' \
-      | tr ',' '\n' \
-      | sort -u \
-      | awk 'system("[ -e /lib/"$1" -o -e /usr/lib/"$1" -o -e /opt/dpgpid/lib/python'"${PYTHON_RELEASE}"'/site-packages/*/"$1" ]") == 0 { next } { print "so:" $1 }' \
-      | xargs -rt apk add --no-cache
+ && find ./lib -type f -executable -exec scanelf --needed --nobanner --format '%n#p' '{}' ';' \
+     |tr ',' '\n' \
+     |sort -u \
+     |awk 'system("[ -e /lib/"$1" -o -e /usr/lib/"$1" -o -e ./lib/python'"${PYTHON_RELEASE}"'/site-packages/*/"$1" ]") == 0 { next } { print "so:" $1 }' \
+     |xargs -rt apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/
 
-RUN apk add --repository https://dl-cdn.alpinelinux.org/alpine/edge/testing \
-    envsubst \
- && apk add --no-cache \
+RUN apk add --no-cache \
     bash \
     ca-certificates \
+    gettext \
+    gpg \
+    gpg-agent \
     libc6-compat \
     libsodium \
     make \
-    gpg \
  && OS="$(echo ${OPERATING_SYSTEM} |awk '{print tolower($0)}')"; \
     ARCH="$(echo ${PROCESSOR_ARCHITECTURE})"; \
-    wget -qO - https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.${OS}.${ARCH}.tar.xz |tar --strip-components 1 -C /usr/local/bin -xJf - \
- && mkdir -p /usr/local/lib/shellspec \
- && wget -qO - https://github.com/shellspec/shellspec/archive/latest.tar.gz |tar --strip-components 1 -C /usr/local/lib/shellspec -xzf - \
- && ln -s /usr/local/lib/shellspec/shellspec /usr/local/bin/shellspec
+    wget -qO - https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.${OS}.${ARCH}.tar.xz \
+     |tar --strip-components 1 -C ./bin -xJf - \
+ && mkdir -p /opt/shellspec \
+ && wget -qO - https://github.com/shellspec/shellspec/archive/refs/heads/master.tar.gz \
+     |tar --strip-components 1 -C /opt/shellspec -xzf - \
+ && ln -s /opt/shellspec/shellspec ./bin/shellspec
 
-COPY --from=ipfs/go-ipfs:v0.13.0-rc1 /usr/local/bin/ipfs /usr/local/bin/
+COPY --from=ipfs/go-ipfs:v0.13.0-rc1 /usr/local/bin/ipfs ./bin/
 COPY README.md ./
 COPY COPYING ./
 COPY Makefile ./
+COPY .shellspec ./
+COPY specs/ ./specs/
 COPY dpgpid ./bin/dpgpid
 COPY gpgkey ./bin/gpgkey
 

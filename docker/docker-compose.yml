@@ -10,7 +10,6 @@ services:
       - USER=${USER}
       context: ..
       dockerfile: docker/dpgpid/Dockerfile
-    command: tail -f /dev/null
     image: ${DOCKER_REPOSITORY}/dpgpid:${DOCKER_IMAGE_TAG}
     networks:
     - private
