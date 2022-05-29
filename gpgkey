@@ -33,6 +33,7 @@ from cryptography.hazmat.primitives import serialization
 import duniterpy.key
 import gpg
 import nacl.bindings
+import nacl.encoding
 import pgpy
 import logging as log
 import os
@@ -278,16 +279,21 @@ PrivKEY: {self.ipfs_privkey}
         log.debug("def gpgkey.pgpy_key_seed(self)")
         self.pgpy_key_type()
         # todo : unlock password protected key
-        # todo : choose a custom seed for RSA
-        assert self.pgpy.is_unlocked
-        if self.pgpy_key_type == 'RSA.disabled':
+        # assert self.pgpy.is_unlocked
+        if self.pgpy_key_type == 'RSA':
+            log.debug("self.pgpy._key.keymaterial.p=%s" % self.pgpy._key.keymaterial.p)
+            log.debug("self.pgpy._key.keymaterial.q=%s" % self.pgpy._key.keymaterial.q)
+            # custom seed: use sha256 hash of (p + q)
+            self.pgpy_key_seed = nacl.bindings.crypto_hash_sha256(long_to_bytes(self.pgpy._key.keymaterial.p + self.pgpy._key.keymaterial.q))
             p = long_to_bytes(self.pgpy._key.keymaterial.p)
             q = long_to_bytes(self.pgpy._key.keymaterial.q)
             self.pgpy_key_value = "".join([f"{c:02x}" for c in p]) + "".join([f"{c:02x}" for c in q])
             self.pgpy_key_size = (len(p) + len(q)) * 8
+            log.debug("self.pgpy_key_seed=%s" % self.pgpy_key_seed)
             log.debug("self.pgpy_key_value=%s" % self.pgpy_key_value)
             log.debug("self.pgpy_key_size=%s" % self.pgpy_key_size)
         elif self.pgpy_key_type in ('ECDSA', 'EdDSA', 'ECDH'):
+            log.debug("self.pgpy._key.keymaterial.s=%s" % self.pgpy._key.keymaterial.s)
             self.pgpy_key_seed = long_to_bytes(self.pgpy._key.keymaterial.s)
             self.pgpy_key_value = "".join([f"{c:02x}" for c in self.pgpy_key_seed])
             self.pgpy_key_size = len(self.pgpy_key_seed)*8
