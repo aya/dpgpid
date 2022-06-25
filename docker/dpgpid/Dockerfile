@@ -48,14 +48,14 @@ RUN apk add --no-cache \
      |tar --strip-components 1 -C /opt/shellspec -xzf - \
  && ln -s /opt/shellspec/shellspec ./bin/shellspec
 
-COPY --from=ipfs/go-ipfs:v0.13.0-rc1 /usr/local/bin/ipfs ./bin/
+COPY --from=ipfs/go-ipfs:v0.13.0 /usr/local/bin/ipfs ./bin/
 COPY README.md ./
 COPY COPYING ./
 COPY Makefile ./
 COPY .shellspec ./
 COPY specs/ ./specs/
 COPY dpgpid ./bin/dpgpid
-COPY gpgkey ./bin/gpgkey
+COPY keygen ./bin/keygen
 
 ENV PATH=/opt/dpgpid/bin:$PATH
 

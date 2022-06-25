@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # link: https://git.p2p.legal/aya/dpgpid/
-# desc: gpgkey converts ed25519 gpg keys to ed25519 duniter and ipfs keys
+# desc: generate ed25519 keys suitable for duniter or ipfs
 
 # Copyleft 2022 Yann Autissier <aya@asycn.io>
 # all crypto science belongs to Pascal Engélibert <tuxmain@zettascript.org>
@@ -44,7 +44,7 @@ import time
 
 __version__='0.0.1'
 
-class gpgkey:
+class keygen:
     def __init__(self):
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument(
@@ -58,7 +58,20 @@ class gpgkey:
             "--input",
             dest="input",
             default=None,
-            help="read credentials from file INPUT",
+            help="read public and secret keys in pubsec format from file INPUT",
+        )
+        self.parser.add_argument(
+            "-g",
+            "--gpg",
+            action="store_true",
+            help="use gpg key from user id matched by username option as input",
+        )
+        self.parser.add_argument(
+            "-o",
+            "--output",
+            dest="output",
+            default=None,
+            help="write public and secret keys to file OUTPUT",
         )
         self.parser.add_argument(
             "-q",
@@ -67,11 +80,11 @@ class gpgkey:
             help="show only errors",
         )
         self.parser.add_argument(
-            "-o",
-            "--output",
-            dest="output",
-            default=None,
-            help="write keys to file OUTPUT",
+            "-t",
+            "--type",
+            dest="type",
+            default="ipfs",
+            help="output key type : [ duniter | ipfs ]",
         )
         self.parser.add_argument(
             "-v",
@@ -85,11 +98,7 @@ class gpgkey:
             help="show version and exit",
         )
         self.parser.add_argument(
-            'command',
-            help="duniter|ipfs",
-            nargs="?",
-        )
-        self.parser.add_argument( 'username',
+            'username',
             nargs="?",
         )
         self.parser.add_argument(
@@ -97,38 +106,43 @@ class gpgkey:
             nargs="?",
         )
 
-    def _check_args(self):
-        log.debug("def gpgkey._check_args(self)")
-        log.debug("self.command=%s" % self.command)
+    def _check_args(self, args):
+        log.debug("def keygen._check_args(self, args)")
         log.debug("self.username=%s" % self.username)
         log.debug("self.password=%s" % self.password)
-        if self.command:
-            if self.input is None:
-                if self.password is None or self.username is None:
-                    self.parser.error(f"{self.command} requires an input file or username and password args")
+        if self.input is None:
+            if self.password is None:
+                if self.username is None or args.gpg is False:
+                    self.parser.error(f"keygen requires an input file or username and password args")
 
-    def _invalid_command(self):
-        log.debug("def gpgkey._invalid_command(self)")
-        self.parser.error(f"{self.command} is not a valid command.")
+    def _invalid_type(self):
+        log.debug("def keygen._invalid_type(self)")
+        self.parser.error(f"type: {self.type} is not valid.")
 
     def _load_config(self):
-        log.debug("def gpgkey._load_config(self)")
+        log.debug("def keygen._load_config(self)")
         self.config = configparser.RawConfigParser()
         config_dir = os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config')), 'dpgpid')
         log.debug("config_dir=%s" % config_dir)
-        self.config.read( [config_dir + '/gpgkey.conf'] )
+        self.config.read( [config_dir + '/keygen.conf'] )
 
     def base58_from_ed25519(self):
-        log.debug("def gpgkey.base58_from_ed25519(self)")
-        self.base58_public_key = base58.b58encode(self.ed25519_public_key).decode('ascii')
-        self.base58_secret_key = base58.b58encode(self.ed25519_secret_key).decode('ascii')
+        log.debug("def keygen.base58_from_ed25519(self)")
+        self.base58_public_key = base58.b58encode(self.ed25519_public_bytes).decode('ascii')
+        self.base58_secret_key = base58.b58encode(self.ed25519_secret_bytes).decode('ascii')
         log.debug("self.base58_public_key=%s" % self.base58_public_key)
         log.debug("self.base58_secret_key=%s" % self.base58_secret_key)
 
+    def base58_from_pubsec(self):
+        log.debug("def keygen.base58_from_pubsec(self)")
+        for line in open(self.input, "r"):
+            if re.search("pub", line):
+                self.base58_public_key = line.replace('\n','').split(': ')[1]
+            elif re.search("sec", line):
+                self.base58_secret_key = line.replace('\n','').split(': ')[1]
+
     def do_duniter(self):
-        log.debug("def gpgkey.do_duniter(self)")
-        self.duniterpy_from_salt_and_password()
-        self.ed25519_from_duniterpy()
+        log.debug("def keygen.do_duniter(self)")
         self.base58_from_ed25519()
         if self.output is None:
             print("pub: %s" % self.base58_public_key)
@@ -144,67 +158,20 @@ sec: {self.base58_secret_key}
             os.chmod(self.output, 0o600)
 
     def do_ipfs(self):
-        log.debug("def gpgkey.do_ipfs(self)")
-        if self.input is None:
-            self.duniterpy_from_salt_and_password()
-            self.ed25519_from_duniterpy()
-            self.base58_from_ed25519()
-        else:
-            for line in open(self.input, "r"):
-                if re.search("pub", line):
-                    self.base58_public_key = line.replace('\n','').split(': ')[1]
-                elif re.search("sec", line):
-                    self.base58_secret_key = line.replace('\n','').split(': ')[1]
-            self.ed25519_from_base58()
+        log.debug("def keygen.do_ipfs(self)")
         self.ipfs_from_ed25519()
         if self.output is None:
             print("PeerID: %s" % self.ipfs_peerid)
             print("PrivKEY: %s" % self.ipfs_privkey)
         else:
+            # with open(self.output, "wb") as fh:
+            #     fh.write(self.ipfs_libp2p_protobuf_key)
             with open(self.output, "w") as fh:
-                fh.write(f"""Type: PubSec
-Version: 1
-pub: {self.base58_public_key}
-sec: {self.base58_secret_key}
-PeerID: {self.ipfs_peerid}
-PrivKEY: {self.ipfs_privkey}
-"""
-                )
-            os.chmod(self.output, 0o600)
-
-    def do_pgp(self):
-        log.debug("def gpgkey.do_pgp(self)")
-        keys = self.gpg.keylist(pattern=self.username)
-        pubkeys = list(self.gpg.keylist(pattern=None, secret=False))
-        seckeys = list(self.gpg.keylist(pattern=None, secret=True))
-        self.armored_pgp_public_key = self.gpg.key_export(self.username)
-        self.armored_pgp_secret_key = self.gpg.key_export_secret(self.username)
-        log.debug("self.armored_pgp_public_key=%s" % self.armored_pgp_public_key)
-        log.debug("self.armored_pgp_secret_key=%s" % self.armored_pgp_secret_key)
-        self.pgpy, _ = pgpy.PGPKey.from_blob(self.armored_pgp_secret_key)
-        log.debug("self.pgpy.fingerprint.keyid=%s" % self.pgpy.fingerprint.keyid)
-        self.ed25519_from_pgpy()
-        self.base58_from_ed25519()
-        self.ipfs_from_ed25519()
-        if self.output is None:
-            print("pub: %s" % self.base58_public_key)
-            print("sec: %s" % self.base58_secret_key)
-            print("PeerID: %s" % self.ipfs_peerid)
-            print("PrivKEY: %s" % self.ipfs_privkey)
-        else:
-            with open(self.output, "w") as fh:
-                fh.write(f"""Type: PubSec
-Version: 1
-pub: {self.base58_public_key}
-sec: {self.base58_secret_key}
-PeerID: {self.ipfs_peerid}
-PrivKEY: {self.ipfs_privkey}
-"""
-                )
+                fh.write(self.ed25519_secret_pem_pkcs8)
             os.chmod(self.output, 0o600)
 
     def duniterpy_from_salt_and_password(self):
-        log.debug("def gpgkey.duniterpy_from_salt_and_password(self)")
+        log.debug("def keygen.duniterpy_from_salt_and_password(self)")
         scrypt_params = duniterpy.key.scrypt_params.ScryptParams(
             int(self.config.get('scrypt', 'n')) if self.config.has_option('scrypt', 'n') else 4096,
             int(self.config.get('scrypt', 'r')) if self.config.has_option('scrypt', 'r') else 16,
@@ -217,54 +184,84 @@ PrivKEY: {self.ipfs_privkey}
             scrypt_params
         )
 
+    def ed25519(self, args):
+        log.debug("def keygen.ed25519(self, args)")
+        if args.gpg is True:
+            self.ed25519_from_gpg()
+        elif self.input is None:
+            self.duniterpy_from_salt_and_password()
+            self.ed25519_from_duniterpy()
+        else:
+            self.base58_from_pubsec()
+            self.ed25519_from_base58()
+
     def ed25519_from_base58(self):
-        log.debug("def gpgkey.ed25519_from_base58(self)")
-        self.ed25519_public_key = base58.b58decode(self.base58_public_key)
-        self.ed25519_secret_key = base58.b58decode(self.base58_secret_key)
-        log.debug("self.ed25519_public_key=%s" % self.ed25519_public_key)
-        log.debug("self.ed25519_secret_key=%s" % self.ed25519_secret_key)
+        log.debug("def keygen.ed25519_from_base58(self)")
+        self.ed25519_public_bytes = base58.b58decode(self.base58_public_key)
+        self.ed25519_secret_bytes = base58.b58decode(self.base58_secret_key)
+        log.debug("self.ed25519_public_bytes=%s" % self.ed25519_public_bytes)
+        log.debug("self.ed25519_secret_bytes=%s" % self.ed25519_secret_bytes)
 
     def ed25519_from_duniterpy(self):
-        log.debug("def gpgkey.ed25519_from_duniterpy(self)")
-        self.ed25519_public_key = base58.b58decode(self.duniterpy.pubkey)
-        self.ed25519_secret_key = self.duniterpy.sk
-        log.debug("self.ed25519_public_key=%s" % self.ed25519_public_key)
-        log.debug("self.ed25519_secret_key=%s" % self.ed25519_secret_key)
+        log.debug("def keygen.ed25519_from_duniterpy(self)")
+        self.ed25519_public_bytes = base58.b58decode(self.duniterpy.pubkey)
+        self.ed25519_secret_bytes = self.duniterpy.sk
+        log.debug("self.ed25519_public_bytes=%s" % self.ed25519_public_bytes)
+        log.debug("self.ed25519_secret_bytes=%s" % self.ed25519_secret_bytes)
+
+    def ed25519_from_gpg(self):
+        log.debug("def keygen.ed25519_from_gpg(self)")
+        self.gpg_pubkeys = list(self.gpg.keylist(pattern=self.username, secret=False))
+        self.gpg_seckeys = list(self.gpg.keylist(pattern=self.username, secret=True))
+        log.debug("self.gpg_pubkeys=%s" % self.gpg_pubkeys)
+        log.debug("self.gpg_seckeys=%s" % self.gpg_seckeys)
+        self.gpg_seckey = self.gpg_seckeys[0]
+        log.debug("self.gpg_seckey.fpr=%s" % self.gpg_seckey.fpr)
+        log.debug("self.gpg_seckey.key=%s" % self.gpg_seckey.__repr__)
+        self.armored_pgp_public_key = self.gpg.key_export(self.gpg_seckey.fpr)
+        self.armored_pgp_secret_key = self.gpg.key_export_secret(self.gpg_seckey.fpr)
+        log.debug("self.armored_pgp_public_key=%s" % self.armored_pgp_public_key)
+        log.debug("self.armored_pgp_secret_key=%s" % self.armored_pgp_secret_key)
+        self.pgpy, _ = pgpy.PGPKey.from_blob(self.armored_pgp_secret_key)
+        log.debug("self.pgpy.fingerprint.keyid=%s" % self.pgpy.fingerprint.keyid)
+        self.ed25519_from_pgpy()
 
     def ed25519_from_pgpy(self):
-        log.debug("def gpgkey.ed25519_from_pgpy(self)")
+        log.debug("def keygen.ed25519_from_pgpy(self)")
         self.pgpy_key_seed()
-        self.ed25519_public_key, self.ed25519_secret_key = nacl.bindings.crypto_sign_seed_keypair(self.pgpy_key_seed)
-        log.debug("self.ed25519_public_key=%s" % self.ed25519_public_key)
-        log.debug("self.ed25519_secret_key=%s" % self.ed25519_secret_key)
+        self.ed25519_public_bytes, self.ed25519_secret_bytes = nacl.bindings.crypto_sign_seed_keypair(self.pgpy_key_seed)
+        log.debug("self.ed25519_public_bytes=%s" % self.ed25519_public_bytes)
+        log.debug("self.ed25519_secret_bytes=%s" % self.ed25519_secret_bytes)
 
     def ipfs_from_ed25519(self):
-        log.debug("def ipfs_from_ed25519(self)")
+        log.debug("def keygen.ipfs_from_ed25519(self)")
 
-        # Decoding keys
-        ipfs_shared = ed25519.Ed25519PublicKey.from_public_bytes(self.ed25519_public_key)
-        ipfs_secure = ed25519.Ed25519PrivateKey.from_private_bytes(self.ed25519_secret_key[:32])
-        ipfs_shared_bytes = ipfs_shared.public_bytes(encoding=serialization.Encoding.Raw,
-                                                     format=serialization.PublicFormat.Raw)
-        ipfs_secure_bytes = ipfs_secure.private_bytes(encoding=serialization.Encoding.Raw,
-                                                      format=serialization.PrivateFormat.Raw,
-                                                      encryption_algorithm=serialization.NoEncryption())
-
-        # Formulating PeerID
-        ipfs_pid = base58.b58encode(b'\x00$\x08\x01\x12 ' + ipfs_shared_bytes)
+        # PeerID
+        ipfs_pid = base58.b58encode(b'\x00$\x08\x01\x12 ' + self.ed25519_public_bytes)
         self.ipfs_peerid = ipfs_pid.decode('ascii')
-
-        # Serializing private key in IPFS-native mode, the private key contains public one
-        pkey = crypto_pb2.PrivateKey()
-        #pkey.Type = crypto_pb2.KeyType.Ed25519
-        pkey.Type = 1
-        pkey.Data = ipfs_secure_bytes + ipfs_shared_bytes
-        self.ipfs_privkey = base64.b64encode(pkey.SerializeToString()).decode('ascii')
         log.debug("self.ipfs_peerid=%s" % self.ipfs_peerid)
+
+        # PrivKey
+        pkey = crypto_pb2.PrivateKey()
+        pkey.Type = crypto_pb2.KeyType.Ed25519
+        pkey.Data = self.ed25519_secret_bytes
+        self.ipfs_privkey = base64.b64encode(pkey.SerializeToString()).decode('ascii')
         log.debug("self.ipfs_privkey=%s" % self.ipfs_privkey)
 
+        # libp2p-protobuf-cleartext format for ipfs key import
+        self.ipfs_libp2p_protobuf_key = pkey.SerializeToString()
+
+        # pem-pkcs8-cleartext format for ipfs key import
+        self.pem_pkcs8_from_ed25519()
+
+    def pem_pkcs8_from_ed25519(self):
+        log.debug("def keygen.pem_pkcs8_from_ed25519(self)")
+
+        self.ed25519_secret_pem_pkcs8 = ed25519.Ed25519PrivateKey.from_private_bytes(self.ed25519_secret_bytes[:32]).private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=serialization.NoEncryption()).decode('ascii')
+        log.debug("self.ed25519_secret_pem_pkcs8=%s" % self.ed25519_secret_pem_pkcs8)
+
     def pgpy_key_flags(self):
-        log.debug("def gpgkey.pgpy_key_flags(self)")
+        log.debug("def keygen.pgpy_key_flags(self)")
         flags = []
         strs = {pgpy.constants.KeyFlags.Certify : 'C',
                 pgpy.constants.KeyFlags.Sign : 'S',
@@ -276,7 +273,7 @@ PrivKEY: {self.ipfs_privkey}
         self.pgpy_key_flags = "".join(strs.get(flag, '') for flag in flags)
 
     def pgpy_key_seed(self):
-        log.debug("def gpgkey.pgpy_key_seed(self)")
+        log.debug("def keygen.pgpy_key_seed(self)")
         self.pgpy_key_type()
         # todo : unlock password protected key
         # assert self.pgpy.is_unlocked
@@ -292,6 +289,7 @@ PrivKEY: {self.ipfs_privkey}
             log.debug("self.pgpy_key_seed=%s" % self.pgpy_key_seed)
             log.debug("self.pgpy_key_value=%s" % self.pgpy_key_value)
             log.debug("self.pgpy_key_size=%s" % self.pgpy_key_size)
+            log.debug("self.pgpy._key.keymaterial.encbytes=%s" % self.pgpy._key.keymaterial.encbytes)
         elif self.pgpy_key_type in ('ECDSA', 'EdDSA', 'ECDH'):
             log.debug("self.pgpy._key.keymaterial.s=%s" % self.pgpy._key.keymaterial.s)
             self.pgpy_key_seed = long_to_bytes(self.pgpy._key.keymaterial.s)
@@ -304,7 +302,7 @@ PrivKEY: {self.ipfs_privkey}
             raise NotImplementedError(f"Get seed from {self.pgpy_key_type} key is not supported")
 
     def pgpy_key_type(self):
-        log.debug("def gpgkey.pgpy_key_type(self)")
+        log.debug("def keygen.pgpy_key_type(self)")
         if isinstance(self.pgpy._key.keymaterial, pgpy.packet.fields.RSAPriv):
             self.pgpy_key_type = 'RSA'
         elif isinstance(self.pgpy._key.keymaterial, pgpy.packet.fields.DSAPriv):
@@ -343,11 +341,12 @@ PrivKEY: {self.ipfs_privkey}
             log_level='WARNING'
         log.basicConfig(format=log_format, datefmt=log_datefmt, level=log_level)
 
-        self._check_args()
+        self._check_args(args)
         self._load_config()
         # self.gpg = gpg.Context(armor=True, offline=True, homedir=GNUPGHOME)
         self.gpg = gpg.Context(armor=True, offline=True)
-        method = getattr(self, f'do_{self.command}', self._invalid_command)
+        self.ed25519(args)
+        method = getattr(self, f'do_{self.type}', self._invalid_type)
         return method()
 
 # long_to_bytes comes from PyCrypto, which is released into Public Domain
@@ -402,7 +401,7 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
 
-    cli = gpgkey()
+    cli = keygen()
     return cli.run(argv)
 
 def version(version=__version__):
