@@ -3,5 +3,6 @@ cryptography
 duniterpy
 google
 pgpy
+pynentry
 protobuf
 pynacl

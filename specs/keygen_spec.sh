@@ -102,35 +102,53 @@ Describe 'keygen'
     rm -f /tmp/keygen_test_ipfs.pem
   End
   Describe '-t pgp username password birthday:'
-    gpg --import --quiet specs/username.asc
-    gpg --import --quiet specs/username.pub
-    It 'creates a gpg key for user username'
+    gpg --batch --import --quiet specs/username.asc
+    gpg --batch --import --quiet specs/username_protected.asc
+    It 'creates a password protected gpg key for user username'
       Skip "You should implement it !"
-      When run keygen -t pgp username password
+      When run keygen -t pgp username password birthday
       The status should be success
     End
   End
   Describe '-g -t duniter username:'
     It 'prints duniter keys for gpg key matching username'
-      When run keygen -g -t duniter username
+      When run keygen -g -t duniter 079E5BF4721944FB
       The output should include 'pub: 2g5UL2zhkn5i7oNYDpWo3fBuWvRYVU1AbMtdVmnGzPNv'
       The output should include 'sec: 5WtYFfA26nTfG496gAKhkrLYUMMnwXexmE1E8Q7PvtQEyscHfirsdMzW34zDp7WEkt3exNEVwoG4ajZYrm62wpi2'
       The status should be success
       The stderr should equal ""
     End
   End
+  Describe '-g -t duniter username@protected password:'
+    It 'prints duniter keys for gpg key matching username@protected locked with password'
+      When run keygen -g -t duniter 6222A29CBC31A087 password
+      The output should include 'pub: C1cRu7yb5rZhsmRHQkeZxusAhtYYJypcnXpY3HycEKsU'
+      The output should include 'sec: VWaEdDroSCoagJDsBnDNUtXJtKAJYdqL6XKNiomz8DtiyF44FvpiMmhidXt2j8HhDBKPZ67xBGcZPnj4Myk6cB8'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
   Describe '-g -t ipfs username:'
     It 'prints ipfs keys for gpg key matching username'
-      When run keygen -g -t ipfs username
+      When run keygen -g -t ipfs 079E5BF4721944FB
       The output should include 'PeerID: 12D3KooWBVSe5AaQwgMCXgsxrRG8pTGk1FUBXA5eYxFeskwAtL6r'
       The output should include 'PrivKEY: CAESQOHXwPgzoiDca1ZnvhU/W3zdogZXulkoErnUsqt+ut82GN5k4MIbVvz2m6Vq0ij9fQFPNUz+ZZdv2D31K6mzBQc='
       The status should be success
       The stderr should equal ""
     End
   End
+  Describe '-g -t ipfs username@protected password:'
+    It 'prints ipfs keys for gpg key matching username@protected locked with password'
+      When run keygen -g -t ipfs 6222A29CBC31A087 password
+      The output should include 'PeerID: 12D3KooWLpybeFZJGkqCHevi3MPujhx1CDbBLfu6k8BZRH8W8GbQ'
+      The output should include 'PrivKEY: CAESQBiV+XnBNnryoeBs6SNj9e7Cd9Xj6INn24wyxxacylYqo5idwBHJto4Vbbp6NQzuUF+e7aCmrCf6y+BSyL42/i8='
+      The status should be success
+      The stderr should equal ""
+    End
+  End
   Describe '-g -o /tmp/keygen_test_duniter.pubsec -t duniter username:'
     It 'writes duniter keys to file for gpg key matching username'
-      When run keygen -g -o /tmp/keygen_test_duniter.pubsec -t duniter username
+      When run keygen -g -o /tmp/keygen_test_duniter.pubsec -t duniter 079E5BF4721944FB
       The path '/tmp/keygen_test_duniter.pubsec' should exist
       The contents of file '/tmp/keygen_test_duniter.pubsec' should include 'pub: 2g5UL2zhkn5i7oNYDpWo3fBuWvRYVU1AbMtdVmnGzPNv'
       The contents of file '/tmp/keygen_test_duniter.pubsec' should include 'sec: 5WtYFfA26nTfG496gAKhkrLYUMMnwXexmE1E8Q7PvtQEyscHfirsdMzW34zDp7WEkt3exNEVwoG4ajZYrm62wpi2'
@@ -139,9 +157,20 @@ Describe 'keygen'
     End
     rm -f /tmp/keygen_test_duniter.pubsec
   End
+  Describe '-g -o /tmp/keygen_test_duniter.pubsec -t duniter username@protected password:'
+    It 'writes duniter keys to file for gpg key matching username@protected locked with password'
+      When run keygen -g -o /tmp/keygen_test_duniter.pubsec -t duniter 6222A29CBC31A087 password
+      The path '/tmp/keygen_test_duniter.pubsec' should exist
+      The contents of file '/tmp/keygen_test_duniter.pubsec' should include 'pub: C1cRu7yb5rZhsmRHQkeZxusAhtYYJypcnXpY3HycEKsU'
+      The contents of file '/tmp/keygen_test_duniter.pubsec' should include 'sec: VWaEdDroSCoagJDsBnDNUtXJtKAJYdqL6XKNiomz8DtiyF44FvpiMmhidXt2j8HhDBKPZ67xBGcZPnj4Myk6cB8'
+      The status should be success
+      The stderr should equal ""
+    End
+    rm -f /tmp/keygen_test_duniter.pubsec
+  End
   Describe '-g -o /tmp/keygen_test_ipfs.pem -t ipfs username:'
     It 'writes ipfs keys to file for gpg key matching username'
-      When run keygen -g -o /tmp/keygen_test_ipfs.pem -t ipfs username
+      When run keygen -g -o /tmp/keygen_test_ipfs.pem -t ipfs 079E5BF4721944FB
       The path '/tmp/keygen_test_ipfs.pem' should exist
       The contents of file '/tmp/keygen_test_ipfs.pem' should include '-----BEGIN PRIVATE KEY-----'
       The contents of file '/tmp/keygen_test_ipfs.pem' should include 'MC4CAQAwBQYDK2VwBCIEIOHXwPgzoiDca1ZnvhU/W3zdogZXulkoErnUsqt+ut82'
@@ -151,4 +180,18 @@ Describe 'keygen'
     End
     rm -f /tmp/keygen_test_ipfs.pem
   End
+  Describe '-g -o /tmp/keygen_test_ipfs.pem -t ipfs username@protected password:'
+    It 'writes ipfs keys to file for gpg key matching username@protected locked with password'
+      When run keygen -g -o /tmp/keygen_test_ipfs.pem -t ipfs 6222A29CBC31A087 password
+      The path '/tmp/keygen_test_ipfs.pem' should exist
+      The contents of file '/tmp/keygen_test_ipfs.pem' should include '-----BEGIN PRIVATE KEY-----'
+      The contents of file '/tmp/keygen_test_ipfs.pem' should include 'MC4CAQAwBQYDK2VwBCIEIBiV+XnBNnryoeBs6SNj9e7Cd9Xj6INn24wyxxacylYq'
+      The contents of file '/tmp/keygen_test_ipfs.pem' should include '-----END PRIVATE KEY-----'
+      The status should be success
+      The stderr should equal ""
+    End
+    rm -f /tmp/keygen_test_ipfs.pem
+  End
+  gpg --batch --delete-secret-and-public-key --yes 4D1CDB77E91FFCD81B10F9A7079E5BF4721944FB
+  gpg --batch --delete-secret-and-public-key --yes 6AF574897D4979B7956AC31B6222A29CBC31A087
 End

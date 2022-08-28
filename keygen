@@ -35,12 +35,14 @@ import gpg
 import nacl.bindings
 import nacl.encoding
 import pgpy
+import pynentry
 import logging as log
 import os
 import re
 import struct
 import sys
 import time
+import warnings
 
 __version__='0.0.1'
 
@@ -109,7 +111,6 @@ class keygen:
     def _check_args(self, args):
         log.debug("def keygen._check_args(self, args)")
         log.debug("self.username=%s" % self.username)
-        log.debug("self.password=%s" % self.password)
         if self.input is None:
             if self.password is None:
                 if self.username is None or args.gpg is False:
@@ -212,26 +213,72 @@ sec: {self.base58_secret_key}
     def ed25519_from_gpg(self):
         log.debug("def keygen.ed25519_from_gpg(self)")
         self.gpg_pubkeys = list(self.gpg.keylist(pattern=self.username, secret=False))
-        self.gpg_seckeys = list(self.gpg.keylist(pattern=self.username, secret=True))
         log.debug("self.gpg_pubkeys=%s" % self.gpg_pubkeys)
+        self.gpg_seckeys = list(self.gpg.keylist(pattern=self.username, secret=True))
         log.debug("self.gpg_seckeys=%s" % self.gpg_seckeys)
-        self.gpg_seckey = self.gpg_seckeys[0]
+        if not self.gpg_seckeys:
+            log.error(f"""Unable to find any key matching username "{self.username}".""")
+            exit(1)
+        else:
+            self.gpg_seckey = self.gpg_seckeys[0]
+            log.info(f"""Found key id "{self.gpg_seckey.fpr}" matching username "{self.username}".""")
+        log.debug("self.gpg_seckey.__repr__=%s" % self.gpg_seckey.__repr__)
         log.debug("self.gpg_seckey.fpr=%s" % self.gpg_seckey.fpr)
-        log.debug("self.gpg_seckey.key=%s" % self.gpg_seckey.__repr__)
         self.armored_pgp_public_key = self.gpg.key_export(self.gpg_seckey.fpr)
-        self.armored_pgp_secret_key = self.gpg.key_export_secret(self.gpg_seckey.fpr)
         log.debug("self.armored_pgp_public_key=%s" % self.armored_pgp_public_key)
+        if self.password:
+            self.gpg.set_pinentry_mode(gpg.constants.PINENTRY_MODE_LOOPBACK)
+        self.armored_pgp_secret_key = self.gpg.key_export_secret(self.gpg_seckey.fpr)
         log.debug("self.armored_pgp_secret_key=%s" % self.armored_pgp_secret_key)
-        self.pgpy, _ = pgpy.PGPKey.from_blob(self.armored_pgp_secret_key)
-        log.debug("self.pgpy.fingerprint.keyid=%s" % self.pgpy.fingerprint.keyid)
+        if not self.armored_pgp_secret_key:
+            log.error(f"""Unable to export secret key id "{self.gpg_seckey.fpr}" of user "{self.username}". Please check your password!""")
+            exit(2)
+        with warnings.catch_warnings():
+            # remove CryptographyDeprecationWarning about deprecated
+            # SymmetricKeyAlgorithm IDEA, CAST5 and Blowfish (PGPy v0.5.4)
+            warnings.simplefilter('ignore')
+            self.pgpy, _ = pgpy.PGPKey.from_blob(self.armored_pgp_secret_key)
         self.ed25519_from_pgpy()
 
     def ed25519_from_pgpy(self):
         log.debug("def keygen.ed25519_from_pgpy(self)")
-        self.pgpy_key_seed()
+        log.debug("self.pgpy.fingerprint.keyid=%s" % self.pgpy.fingerprint.keyid)
+        log.debug("self.pgpy.is_protected=%s" % self.pgpy.is_protected)
+        if self.pgpy.is_protected:
+            if not self.password:
+                with pynentry.PynEntry() as p:
+                    p.description = f"""The exported key id "{self.pgpy.fingerprint.keyid}" of user "{self.username}" is password protected.
+                    Please enter the passphrase again to unlock it.
+                    """
+                    p.prompt = 'Passphrase:'
+                    try:
+                        self.password = p.get_pin()
+                    except pynentry.PinEntryCancelled:
+                        log.warning('Cancelled! Goodbye.')
+                        exit(2)
+            try:
+                with warnings.catch_warnings():
+                    # remove CryptographyDeprecationWarning about deprecated
+                    # SymmetricKeyAlgorithm IDEA, CAST5 and Blowfish (PGPy v0.5.4)
+                    warnings.simplefilter('ignore')
+                    with self.pgpy.unlock(self.password):
+                        assert self.pgpy.is_unlocked
+                        log.debug("self.pgpy.is_unlocked=%s" % self.pgpy.is_unlocked)
+                        self.pgpy_key_seed()
+            except Exception as e:
+                log.error(f"""Unable to unlock secret key id "{self.gpg_seckey.fpr}" of user "{self.username}". Please check your password!""")
+                exit(2)
+        else:
+            self.pgpy_key_seed()
         self.ed25519_public_bytes, self.ed25519_secret_bytes = nacl.bindings.crypto_sign_seed_keypair(self.pgpy_key_seed)
         log.debug("self.ed25519_public_bytes=%s" % self.ed25519_public_bytes)
         log.debug("self.ed25519_secret_bytes=%s" % self.ed25519_secret_bytes)
+
+    def gpg_passphrase_cb(self, uid_hint, passphrase_info, prev_was_bad):
+        log.debug("uid_hint=%s" % uid_hint)
+        log.debug("passphrase_info=%s" % passphrase_info)
+        log.debug("prev_was_bad=%s" % prev_was_bad)
+        return self.password
 
     def ipfs_from_ed25519(self):
         log.debug("def keygen.ipfs_from_ed25519(self)")
@@ -275,8 +322,6 @@ sec: {self.base58_secret_key}
     def pgpy_key_seed(self):
         log.debug("def keygen.pgpy_key_seed(self)")
         self.pgpy_key_type()
-        # todo : unlock password protected key
-        # assert self.pgpy.is_unlocked
         if self.pgpy_key_type == 'RSA':
             log.debug("self.pgpy._key.keymaterial.p=%s" % self.pgpy._key.keymaterial.p)
             log.debug("self.pgpy._key.keymaterial.q=%s" % self.pgpy._key.keymaterial.q)
@@ -289,7 +334,6 @@ sec: {self.base58_secret_key}
             log.debug("self.pgpy_key_seed=%s" % self.pgpy_key_seed)
             log.debug("self.pgpy_key_value=%s" % self.pgpy_key_value)
             log.debug("self.pgpy_key_size=%s" % self.pgpy_key_size)
-            log.debug("self.pgpy._key.keymaterial.encbytes=%s" % self.pgpy._key.keymaterial.encbytes)
         elif self.pgpy_key_type in ('ECDSA', 'EdDSA', 'ECDH'):
             log.debug("self.pgpy._key.keymaterial.s=%s" % self.pgpy._key.keymaterial.s)
             self.pgpy_key_seed = long_to_bytes(self.pgpy._key.keymaterial.s)
@@ -299,7 +343,7 @@ sec: {self.base58_secret_key}
             log.debug("self.pgpy_key_value=%s" % self.pgpy_key_value)
             log.debug("self.pgpy_key_size=%s" % self.pgpy_key_size)
         else:
-            raise NotImplementedError(f"Get seed from {self.pgpy_key_type} key is not supported")
+            raise NotImplementedError(f"Getting seed from {self.pgpy_key_type} key is not implemented")
 
     def pgpy_key_type(self):
         log.debug("def keygen.pgpy_key_type(self)")
@@ -344,7 +388,9 @@ sec: {self.base58_secret_key}
         self._check_args(args)
         self._load_config()
         # self.gpg = gpg.Context(armor=True, offline=True, homedir=GNUPGHOME)
-        self.gpg = gpg.Context(armor=True, offline=True)
+        self.gpg = gpg.Context( armor=True,
+                                offline=True)
+        self.gpg.set_passphrase_cb(self.gpg_passphrase_cb)
         self.ed25519(args)
         method = getattr(self, f'do_{self.type}', self._invalid_type)
         return method()
