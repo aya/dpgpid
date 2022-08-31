@@ -12,6 +12,14 @@ keygen() {
 }
 
 Describe 'Dependency'
+  Describe 'pinentry:'
+    It 'is available'
+      When run pinentry --help
+      The output should include "pinentry"
+      The status should be success
+      The stderr should be present
+    End
+  End
   Describe 'python3:'
     It 'is available'
       When run python3 --help

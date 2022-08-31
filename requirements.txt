@@ -6,3 +6,4 @@ pgpy
 pynentry
 protobuf
 pynacl
+SecureBytes
