@@ -45,16 +45,25 @@ import sys
 import time
 import warnings
 
-__version__='0.0.1'
+__version__='0.0.2'
 
 class keygen:
     def __init__(self):
-        self.parser = argparse.ArgumentParser()
+# desc: generate ed25519 keys suitable for duniter or ipfs
+        self.parser = argparse.ArgumentParser(description="""
+        Generate ed25519 keys. It converts your Duniter username and password or
+        a GPG key to an IPFS PeerID.""")
         self.parser.add_argument(
             "-d",
             "--debug",
             action="store_true",
             help="show debug informations (WARNING: including SECRET KEY value)",
+        )
+        self.parser.add_argument(
+            "-g",
+            "--gpg",
+            action="store_true",
+            help="use gpg key from user id matched by username option as input",
         )
         self.parser.add_argument(
             "-i",
@@ -64,10 +73,10 @@ class keygen:
             help="read public and secret keys in pubsec format from file INPUT",
         )
         self.parser.add_argument(
-            "-g",
-            "--gpg",
+            "-k",
+            "--keys",
             action="store_true",
-            help="use gpg key from user id matched by username option as input",
+            help="show public and secret keys",
         )
         self.parser.add_argument(
             "-o",
@@ -78,9 +87,9 @@ class keygen:
         )
         self.parser.add_argument(
             "-p",
-            "--public",
+            "--prefix",
             action="store_true",
-            help="show only public key",
+            help="prefix key with key type",
         )
         self.parser.add_argument(
             "-q",
@@ -92,7 +101,7 @@ class keygen:
             "-s",
             "--secret",
             action="store_true",
-            help="show only secret key",
+            help="show secret key",
         )
         self.parser.add_argument(
             "-t",
@@ -130,33 +139,44 @@ class keygen:
 
     def _cleanup(self):
         log.debug("keygen._cleanup()")
-        if hasattr(self, 'armored_pgp_secret_key'):
+        if hasattr(self, 'armored_pgp_secret_key') and self.armored_pgp_secret_key:
             clearmem(self.armored_pgp_secret_key)
-        if hasattr(self, 'base58_secret_key'):
+            log.debug("cleared: keygen.armored_pgp_secret_key")
+        if hasattr(self, 'base58_secret_key') and self.base58_secret_key:
             clearmem(self.base58_secret_key)
+            log.debug("cleared: keygen.base58_secret_key")
         if hasattr(self, 'duniter'):
-            if hasattr(self.duniter, 'sk'):
+            if hasattr(self.duniter, 'sk') and self.duniterpy.sk:
                 clearmem(self.duniterpy.sk)
-        if hasattr(self, 'ed25519_secret_bytes'):
+                log.debug("cleared: keygen.duniterpy.sk")
+        if hasattr(self, 'ed25519_secret_bytes') and self.ed25519_secret_bytes:
             clearmem(self.ed25519_secret_bytes)
-        if hasattr(self, 'ed25519_secret_pem_pkcs8'):
+            log.debug("cleared: keygen.ed25519_secret_bytes")
+        if hasattr(self, 'ed25519_secret_pem_pkcs8') and self.ed25519_secret_pem_pkcs8:
             clearmem(self.ed25519_secret_pem_pkcs8)
-        if hasattr(self, 'ipfs_privkey'):
+            log.debug("cleared: keygen.ed25515_secret_pem_pkcs8")
+        if hasattr(self, 'ipfs_privkey') and self.ipfs_privkey:
             clearmem(self.ipfs_privkey)
-        if hasattr(self, 'password'):
-            if self.password:
-                clearmem(self.password)
+            log.debug("cleared: keygen.ipfs_privkey")
+        if hasattr(self, 'password') and self.password:
+            clearmem(self.password)
+            log.debug("cleared: keygen.password")
         if hasattr(self, 'pgpy'):
-            if hasattr(self.pgpy._key.keymaterial, 'p') and not isinstance(self.pgpy._key.keymaterial.p, object):
+            if hasattr(self.pgpy._key.keymaterial, 'p') and self.pgpy._key.keymaterial.p and not isinstance(self.pgpy._key.keymaterial.p, pgpy.packet.fields.ECPoint):
                 clearmem(self.pgpy._key.keymaterial.p)
-            if hasattr(self.pgpy._key.keymaterial, 'q'):
+                log.debug("cleared: keygen.pgpy._key.material.p")
+            if hasattr(self.pgpy._key.keymaterial, 'q') and self.pgpy._key.keymaterial.q:
                 clearmem(self.pgpy._key.keymaterial.q)
-            if hasattr(self.pgpy._key.keymaterial, 's'):
+                log.debug("cleared: keygen.pgpy._key.material.q")
+            if hasattr(self.pgpy._key.keymaterial, 's') and self.pgpy._key.keymaterial.s:
                 clearmem(self.pgpy._key.keymaterial.s)
-        if hasattr(self, 'pgpy_key_seed'):
-            clearmem(self.pgpy_key_seed)
-        if hasattr(self, 'pgpy_key_value'):
-            clearmem(self.pgpy_key_value)
+                log.debug("cleared: keygen.pgpy._key.material.s")
+        if hasattr(self, 'pgp_key_seed') and self.pgp_key_seed:
+            clearmem(self.pgp_key_seed)
+            log.debug("cleared: keygen.pgp_key_seed")
+        if hasattr(self, 'pgp_key_value') and self.pgp_key_value:
+            clearmem(self.pgp_key_value)
+            log.debug("cleared: keygen.pgp_key_value")
 
     def _invalid_type(self):
         log.debug("keygen._invalid_type()")
@@ -219,14 +239,10 @@ class keygen:
         log.debug("keygen.do_duniter()")
         self.base58_from_ed25519()
         if self.output is None:
-            if not self.public and not self.secret:
-                print("pub: %s" % self.base58_public_key)
-                print("sec: %s" % self.base58_secret_key)
-            else:
-                if self.public:
-                    print(self.base58_public_key)
-                if self.secret:
-                    print(self.base58_secret_key)
+            if self.keys or not self.secret:
+                print("%s" % ''.join([self.prefix * 'pub: ', self.base58_public_key]))
+            if self.keys or self.secret:
+                print("%s" % ''.join([self.prefix * 'sec: ', self.base58_secret_key]))
         else:
             with open(self.output, "w") as fh:
                 fh.write(f"""Type: PubSec
@@ -245,14 +261,10 @@ sec: {self.base58_secret_key}
         log.debug("keygen.do_ipfs()")
         self.ipfs_from_ed25519()
         if self.output is None:
-            if not self.public and not self.secret:
-                print("PeerID: %s" % self.ipfs_peerid)
-                print("PrivKEY: %s" % self.ipfs_privkey)
-            else:
-                if self.public:
-                    print(self.ipfs_peerid)
-                if self.secret:
-                    print(self.ipfs_privkey)
+            if self.keys or not self.secret:
+                print("%s" % ''.join(['PeerID: ' * self.prefix, self.ipfs_peerid]))
+            if self.keys or self.secret:
+                print("%s" % ''.join(['PrivKEY: ' * self.prefix, self.ipfs_privkey]))
         else:
             # with open(self.output, "wb") as fh:
             #     fh.write(self.ipfs_libp2p_protobuf_key)
@@ -277,6 +289,7 @@ sec: {self.base58_secret_key}
                     self.password = p.get_pin()
                 except pynentry.PinEntryCancelled:
                     log.warning('Cancelled! Goodbye.')
+                    self._cleanup()
                     exit(2)
         self.duniterpy = duniterpy.key.SigningKey.from_credentials(
             self.username,
@@ -315,12 +328,17 @@ sec: {self.base58_secret_key}
         log.debug("keygen.gpg_seckeys=%s" % self.gpg_seckeys)
         if not self.gpg_seckeys:
             log.error(f"""Unable to find any key matching username "{self.username}".""")
+            self._cleanup()
             exit(1)
         else:
             self.gpg_seckey = self.gpg_seckeys[0]
             log.info(f"""Found key id "{self.gpg_seckey.fpr}" matching username "{self.username}".""")
-        log.debug("keygen.gpg_seckey.__repr__=%s" % self.gpg_seckey.__repr__)
+        log.debug("keygen.gpg_seckey.expired=%s" % self.gpg_seckey.expired)
         log.debug("keygen.gpg_seckey.fpr=%s" % self.gpg_seckey.fpr)
+        log.debug("keygen.gpg_seckey.revoked=%s" % self.gpg_seckey.revoked)
+        log.debug("keygen.gpg_seckey.uids=%s" % self.gpg_seckey.uids)
+        log.debug("keygen.gpg_seckey.owner_trust=%s" % self.gpg_seckey.owner_trust)
+        log.debug("keygen.gpg_seckey.last_update=%s" % self.gpg_seckey.last_update)
         self.armored_pgp_public_key = self.gpg.key_export(self.gpg_seckey.fpr)
         log.debug("keygen.armored_pgp_public_key=%s" % self.armored_pgp_public_key)
         if self.password:
@@ -328,7 +346,8 @@ sec: {self.base58_secret_key}
         self.armored_pgp_secret_key = self.gpg.key_export_secret(self.gpg_seckey.fpr)
         log.debug("keygen.armored_pgp_secret_key=%s" % self.armored_pgp_secret_key)
         if not self.armored_pgp_secret_key:
-            log.error(f"""Unable to export secret key id "{self.gpg_seckey.fpr}" of user "{self.username}". Please check your password!""")
+            log.error(f"""Unable to export gpg secret key id "{self.gpg_seckey.fpr}" of user "{self.username}". Please check your password!""")
+            self._cleanup()
             exit(2)
         with warnings.catch_warnings():
             # remove CryptographyDeprecationWarning about deprecated
@@ -344,7 +363,7 @@ sec: {self.base58_secret_key}
         if self.pgpy.is_protected:
             if not self.password:
                 with pynentry.PynEntry() as p:
-                    p.description = f"""The exported key id "{self.pgpy.fingerprint.keyid}" of user "{self.username}" is password protected.
+                    p.description = f"""The exported pgp key id "{self.pgpy.fingerprint.keyid}" of user "{self.username}" is password protected.
                     Please enter the passphrase again to unlock it.
                     """
                     p.prompt = 'Passphrase:'
@@ -352,6 +371,7 @@ sec: {self.base58_secret_key}
                         self.password = p.get_pin()
                     except pynentry.PinEntryCancelled:
                         log.warning('Cancelled! Goodbye.')
+                        self._cleanup()
                         exit(2)
             try:
                 with warnings.catch_warnings():
@@ -361,13 +381,14 @@ sec: {self.base58_secret_key}
                     with self.pgpy.unlock(self.password):
                         assert self.pgpy.is_unlocked
                         log.debug("keygen.pgpy.is_unlocked=%s" % self.pgpy.is_unlocked)
-                        self.pgpy_key_seed_from_pgpy()
+                        self.pgp_key_seed_from_pgpy()
             except Exception as e:
-                log.error(f"""Unable to unlock secret key id "{self.gpg_seckey.fpr}" of user "{self.username}". Please check your password!""")
+                log.error(f"""Unable to unlock pgp secret key id "{self.pgpy.fingerprint.keyid}" of user "{self.username}". Please check your password!""")
+                self._cleanup()
                 exit(2)
         else:
-            self.pgpy_key_seed_from_pgpy()
-        self.ed25519_public_bytes, self.ed25519_secret_bytes = nacl.bindings.crypto_sign_seed_keypair(self.pgpy_key_seed)
+            self.pgp_key_seed_from_pgpy()
+        self.ed25519_public_bytes, self.ed25519_secret_bytes = nacl.bindings.crypto_sign_seed_keypair(self.pgp_key_seed)
         log.debug("keygen.ed25519_public_bytes=%s" % self.ed25519_public_bytes)
         log.debug("keygen.ed25519_secret_bytes=%s" % self.ed25519_secret_bytes)
 
@@ -402,41 +423,29 @@ sec: {self.base58_secret_key}
         self.ed25519_secret_pem_pkcs8 = ed25519.Ed25519PrivateKey.from_private_bytes(self.ed25519_secret_bytes[:32]).private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=serialization.NoEncryption()).decode('ascii')
         log.debug("keygen.ed25519_secret_pem_pkcs8=%s" % self.ed25519_secret_pem_pkcs8)
 
-    def pgpy_key_flags(self):
-        log.debug("keygen.pgpy_key_flags()")
-        flags = []
-        strs = {pgpy.constants.KeyFlags.Certify : 'C',
-                pgpy.constants.KeyFlags.Sign : 'S',
-                pgpy.constants.KeyFlags.EncryptCommunications : 'E',
-                pgpy.constants.KeyFlags.Authentication : 'A'}
-        for sig in self.pgpy.self_signatures:
-            if not sig.is_expired:
-                flags += sig.key_flags
-        self.pgpy_key_flags = "".join(strs.get(flag, '') for flag in flags)
-
-    def pgpy_key_seed_from_pgpy(self):
-        log.debug("keygen.pgpy_key_seed_from_pgpy()")
+    def pgp_key_seed_from_pgpy(self):
+        log.debug("keygen.pgp_key_seed_from_pgpy()")
         self.pgpy_key_type()
         if self.pgpy_key_type == 'RSA':
             log.debug("keygen.pgpy._key.keymaterial.p=%s" % self.pgpy._key.keymaterial.p)
             log.debug("keygen.pgpy._key.keymaterial.q=%s" % self.pgpy._key.keymaterial.q)
             # custom seed: use sha256 hash of (p + q)
-            self.pgpy_key_seed = nacl.bindings.crypto_hash_sha256(long_to_bytes(self.pgpy._key.keymaterial.p + self.pgpy._key.keymaterial.q))
+            self.pgp_key_seed = nacl.bindings.crypto_hash_sha256(long_to_bytes(self.pgpy._key.keymaterial.p + self.pgpy._key.keymaterial.q))
             p = long_to_bytes(self.pgpy._key.keymaterial.p)
             q = long_to_bytes(self.pgpy._key.keymaterial.q)
-            self.pgpy_key_value = "".join([f"{c:02x}" for c in p]) + "".join([f"{c:02x}" for c in q])
-            self.pgpy_key_size = (len(p) + len(q)) * 8
-            log.debug("keygen.pgpy_key_seed=%s" % self.pgpy_key_seed)
-            log.debug("keygen.pgpy_key_value=%s" % self.pgpy_key_value)
-            log.debug("keygen.pgpy_key_size=%s" % self.pgpy_key_size)
+            self.pgp_key_value = "".join([f"{c:02x}" for c in p]) + "".join([f"{c:02x}" for c in q])
+            self.pgp_key_size = (len(p) + len(q)) * 8
+            log.debug("keygen.pgp_key_seed=%s" % self.pgp_key_seed)
+            log.debug("keygen.pgp_key_value=%s" % self.pgp_key_value)
+            log.debug("keygen.pgp_key_size=%s" % self.pgp_key_size)
         elif self.pgpy_key_type in ('ECDSA', 'EdDSA', 'ECDH'):
             log.debug("keygen.pgpy._key.keymaterial.s=%s" % self.pgpy._key.keymaterial.s)
-            self.pgpy_key_seed = long_to_bytes(self.pgpy._key.keymaterial.s)
-            self.pgpy_key_value = "".join([f"{c:02x}" for c in self.pgpy_key_seed])
-            self.pgpy_key_size = len(self.pgpy_key_seed)*8
-            log.debug("keygen.pgpy_key_seed=%s" % self.pgpy_key_seed)
-            log.debug("keygen.pgpy_key_value=%s" % self.pgpy_key_value)
-            log.debug("keygen.pgpy_key_size=%s" % self.pgpy_key_size)
+            self.pgp_key_seed = long_to_bytes(self.pgpy._key.keymaterial.s)
+            self.pgp_key_value = "".join([f"{c:02x}" for c in self.pgp_key_seed])
+            self.pgp_key_size = len(self.pgp_key_seed)*8
+            log.debug("keygen.pgp_key_seed=%s" % self.pgp_key_seed)
+            log.debug("keygen.pgp_key_value=%s" % self.pgp_key_value)
+            log.debug("keygen.pgp_key_size=%s" % self.pgp_key_size)
         else:
             raise NotImplementedError(f"Getting seed from {self.pgpy_key_type} key is not implemented")
 

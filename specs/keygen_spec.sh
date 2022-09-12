@@ -50,14 +50,64 @@ Describe 'keygen'
   Describe '--version:'
     It 'prints version'
       When run keygen --version
-      The output should include 'v0.0.1'
+      The output should include 'v0.0.2'
       The status should be success
       The stderr should equal ""
     End
   End
-  Describe '-t duniter username password:'
-    It 'prints duniter keys for user username'
-      When run keygen -t duniter username password
+  Describe 'username password:'
+    It 'prints base58 public key for user "username" with password "password"'
+      When run keygen username password
+      The output should include '4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-p username password:'
+    It 'prints prefixed base58 public key for user "username" with password "password"'
+      When run keygen -p username password
+      The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-s username password:'
+    It 'prints base58 secret key for user "username" with password "password"'
+      When run keygen -s username password
+      The output should include 'K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-ps username password:'
+    It 'prints prefixed base58 secret key for user "username" with password "password"'
+      When run keygen -ps username password
+      The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-k username password:'
+    It 'prints base58 public and secret keys for user "username" with password "password"'
+      When run keygen -k username password
+      The output should include '4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The output should include 'K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-pk username password:'
+    It 'prints prefixed base58 public and secret keys for user "username" with password "password"'
+      When run keygen -pk username password
+      The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-t duniter -pk username password:'
+    It 'prints prefixed duniter public key for user "username" with password "password"'
+      When run keygen -t duniter -pk username password
       The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
       The status should be success
@@ -66,7 +116,7 @@ Describe 'keygen'
   End
   Describe "-o ${DUNITER_PUBSEC_FILE} -t duniter username password:"
     rm -f "${DUNITER_PUBSEC_FILE}"
-    It 'writes duniter keys to file for user username'
+    It 'writes duniter keys to file for user "username" with password "password"'
       When run keygen -o "${DUNITER_PUBSEC_FILE}" -t duniter username password
       The path "${DUNITER_PUBSEC_FILE}" should exist
       The contents of file "${DUNITER_PUBSEC_FILE}" should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
@@ -75,9 +125,9 @@ Describe 'keygen'
       The stderr should equal ""
     End
   End
-  Describe "-i ${DUNITER_PUBSEC_FILE} -t ipfs:"
-    It 'prints ipfs keys for duniter keys read in pubsec file'
-      When run keygen -i "${DUNITER_PUBSEC_FILE}" -t ipfs
+  Describe "-i ${DUNITER_PUBSEC_FILE} -t ipfs -pk:"
+    It 'prints prefixed ipfs keys for duniter keys read in pubsec file'
+      When run keygen -i "${DUNITER_PUBSEC_FILE}" -t ipfs -pk
       The output should include 'PeerID: 12D3KooWDMhdm5yrvtrbkshXFjkqLedHieUnPioczy9wzdnzquHC'
       The output should include 'PrivKEY: CAESQA+XqCWjRqCjNe9oU3QA796bEH+T+rxgyPQ/EkXvE2MvNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
       The status should be success
@@ -97,8 +147,33 @@ Describe 'keygen'
     rm -f "${DUNITER_PUBSEC_FILE}" "${IPFS_PEM_FILE}"
   End
   Describe '-t ipfs username password:'
-    It 'prints ipfs keys for user username'
+    It 'prints ipfs public key for user "username" with password "password"'
       When run keygen -t ipfs username password
+      The output should include '12D3KooWDMhdm5yrvtrbkshXFjkqLedHieUnPioczy9wzdnzquHC'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-t ipfs -s username password:'
+    It 'prints ipfs secret key for user "username" with password "password"'
+      When run keygen -t ipfs -s username password
+      The output should include 'CAESQA+XqCWjRqCjNe9oU3QA796bEH+T+rxgyPQ/EkXvE2MvNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-t ipfs -k username password:'
+    It 'prints ipfs keys for user "username" with password "password"'
+      When run keygen -t ipfs -k username password
+      The output should include '12D3KooWDMhdm5yrvtrbkshXFjkqLedHieUnPioczy9wzdnzquHC'
+      The output should include 'CAESQA+XqCWjRqCjNe9oU3QA796bEH+T+rxgyPQ/EkXvE2MvNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-t ipfs -pk username password:'
+    It 'prints prefixed ipfs keys for user "username" with password "password"'
+      When run keygen -t ipfs -pk username password
       The output should include 'PeerID: 12D3KooWDMhdm5yrvtrbkshXFjkqLedHieUnPioczy9wzdnzquHC'
       The output should include 'PrivKEY: CAESQA+XqCWjRqCjNe9oU3QA796bEH+T+rxgyPQ/EkXvE2MvNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
       The status should be success
@@ -106,7 +181,7 @@ Describe 'keygen'
     End
   End
   Describe "-o ${IPFS_PEM_FILE} -t ipfs username password:"
-    It 'writes ipfs keys to file for user username'
+    It 'writes ipfs keys to file for user "username" with password "password"'
       When run keygen username password -o "${IPFS_PEM_FILE}" -t ipfs
       The path "${IPFS_PEM_FILE}" should exist
       The contents of file "${IPFS_PEM_FILE}" should include '-----BEGIN PRIVATE KEY-----'
@@ -126,36 +201,36 @@ Describe 'keygen'
       The status should be success
     End
   End
-  Describe '-g -t duniter username:'
-    It 'prints duniter keys for gpg key matching username'
-      When run keygen -g -t duniter username
+  Describe '-g -t duniter -pk username:'
+    It 'prints prefixed duniter keys for gpg key matching "username"'
+      When run keygen -g -t duniter -pk username
       The output should include 'pub: 2g5UL2zhkn5i7oNYDpWo3fBuWvRYVU1AbMtdVmnGzPNv'
       The output should include 'sec: 5WtYFfA26nTfG496gAKhkrLYUMMnwXexmE1E8Q7PvtQEyscHfirsdMzW34zDp7WEkt3exNEVwoG4ajZYrm62wpi2'
       The status should be success
       The stderr should equal ""
     End
   End
-  Describe '-g -t duniter username@protected password:'
-    It 'prints duniter keys for gpg key matching username@protected locked with password'
-      When run keygen -g -t duniter username@protected password
+  Describe '-g -t duniter -pk username@protected password:'
+    It 'prints prefixed duniter keys for gpg key matching "username@protected" locked with "password"'
+      When run keygen -g -t duniter -pk username@protected password
       The output should include 'pub: C1cRu7yb5rZhsmRHQkeZxusAhtYYJypcnXpY3HycEKsU'
       The output should include 'sec: VWaEdDroSCoagJDsBnDNUtXJtKAJYdqL6XKNiomz8DtiyF44FvpiMmhidXt2j8HhDBKPZ67xBGcZPnj4Myk6cB8'
       The status should be success
       The stderr should equal ""
     End
   End
-  Describe '-g -t ipfs username:'
-    It 'prints ipfs keys for gpg key matching username'
-      When run keygen -g -t ipfs username
+  Describe '-g -t ipfs -pk username:'
+    It 'prints prefixed ipfs keys for gpg key matching "username"'
+      When run keygen -g -t ipfs -pk username
       The output should include 'PeerID: 12D3KooWBVSe5AaQwgMCXgsxrRG8pTGk1FUBXA5eYxFeskwAtL6r'
       The output should include 'PrivKEY: CAESQOHXwPgzoiDca1ZnvhU/W3zdogZXulkoErnUsqt+ut82GN5k4MIbVvz2m6Vq0ij9fQFPNUz+ZZdv2D31K6mzBQc='
       The status should be success
       The stderr should equal ""
     End
   End
-  Describe '-g -t ipfs username@protected password:'
-    It 'prints ipfs keys for gpg key matching username@protected locked with password'
-      When run keygen -g -t ipfs username@protected password
+  Describe '-g -t ipfs -pk username@protected password:'
+    It 'prints prefixed ipfs keys for gpg key matching "username@protected" locked with "password"'
+      When run keygen -g -t ipfs -pk username@protected password
       The output should include 'PeerID: 12D3KooWLpybeFZJGkqCHevi3MPujhx1CDbBLfu6k8BZRH8W8GbQ'
       The output should include 'PrivKEY: CAESQBiV+XnBNnryoeBs6SNj9e7Cd9Xj6INn24wyxxacylYqo5idwBHJto4Vbbp6NQzuUF+e7aCmrCf6y+BSyL42/i8='
       The status should be success
@@ -163,7 +238,7 @@ Describe 'keygen'
     End
   End
   Describe "-g -o ${DUNITER_PUBSEC_FILE} -t duniter username:"
-    It 'writes duniter keys to file for gpg key matching username'
+    It 'writes duniter keys to file for gpg key matching "username"'
       When run keygen -g -o "${DUNITER_PUBSEC_FILE}" -t duniter username
       The path "${DUNITER_PUBSEC_FILE}" should exist
       The contents of file "${DUNITER_PUBSEC_FILE}" should include 'pub: 2g5UL2zhkn5i7oNYDpWo3fBuWvRYVU1AbMtdVmnGzPNv'
@@ -174,7 +249,7 @@ Describe 'keygen'
     rm -f "${DUNITER_PUBSEC_FILE}"
   End
   Describe "-g -o ${DUNITER_PUBSEC_FILE} -t duniter username@protected password:"
-    It 'writes duniter keys to file for gpg key matching username@protected locked with password'
+    It 'writes duniter keys to file for gpg key matching "username@protected" locked with "password"'
       When run keygen -g -o "${DUNITER_PUBSEC_FILE}" -t duniter username@protected password
       The path "${DUNITER_PUBSEC_FILE}" should exist
       The contents of file "${DUNITER_PUBSEC_FILE}" should include 'pub: C1cRu7yb5rZhsmRHQkeZxusAhtYYJypcnXpY3HycEKsU'
@@ -185,7 +260,7 @@ Describe 'keygen'
     rm -f "${DUNITER_PUBSEC_FILE}"
   End
   Describe "-g -o ${IPFS_PEM_FILE} -t ipfs username:"
-    It 'writes ipfs keys to file for gpg key matching username'
+    It 'writes ipfs keys to file for gpg key matching "username"'
       When run keygen -g -o "${IPFS_PEM_FILE}" -t ipfs username
       The path "${IPFS_PEM_FILE}" should exist
       The contents of file "${IPFS_PEM_FILE}" should include '-----BEGIN PRIVATE KEY-----'
@@ -197,7 +272,7 @@ Describe 'keygen'
     rm -f "${IPFS_PEM_FILE}"
   End
   Describe "-g -o ${IPFS_PEM_FILE} -t ipfs username@protected password:"
-    It 'writes ipfs keys to file for gpg key matching username@protected locked with password'
+    It 'writes ipfs keys to file for gpg key matching "username@protected" locked with "password"'
       When run keygen -g -o "${IPFS_PEM_FILE}" -t ipfs username@protected password
       The path "${IPFS_PEM_FILE}" should exist
       The contents of file "${IPFS_PEM_FILE}" should include '-----BEGIN PRIVATE KEY-----'
