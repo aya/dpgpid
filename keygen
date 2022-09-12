@@ -54,7 +54,7 @@ class keygen:
             "-d",
             "--debug",
             action="store_true",
-            help="show debug informations (WARNING: THIS WILL PRINT PRIVATE KEY VALUE)",
+            help="show debug informations (WARNING: including SECRET KEY value)",
         )
         self.parser.add_argument(
             "-i",
@@ -77,17 +77,29 @@ class keygen:
             help="write public and secret keys to file OUTPUT",
         )
         self.parser.add_argument(
+            "-p",
+            "--public",
+            action="store_true",
+            help="show only public key",
+        )
+        self.parser.add_argument(
             "-q",
             "--quiet",
             action="store_true",
             help="show only errors",
         )
         self.parser.add_argument(
+            "-s",
+            "--secret",
+            action="store_true",
+            help="show only secret key",
+        )
+        self.parser.add_argument(
             "-t",
             "--type",
             dest="type",
-            default="ipfs",
-            help="output key type : [ duniter | ipfs ]",
+            default="base58",
+            help="output key type : [ base58 | duniter | ipfs ]",
         )
         self.parser.add_argument(
             "-v",
@@ -118,26 +130,32 @@ class keygen:
 
     def _cleanup(self):
         log.debug("keygen._cleanup()")
-        if hasattr(keygen, 'base58_secret_key'):
+        if hasattr(self, 'armored_pgp_secret_key'):
+            clearmem(self.armored_pgp_secret_key)
+        if hasattr(self, 'base58_secret_key'):
             clearmem(self.base58_secret_key)
-        if hasattr(keygen, 'duniter'):
-            if hasattr(keygen.duniter, 'sk'):
+        if hasattr(self, 'duniter'):
+            if hasattr(self.duniter, 'sk'):
                 clearmem(self.duniterpy.sk)
-        if hasattr(keygen, 'ed25519_secret_bytes'):
+        if hasattr(self, 'ed25519_secret_bytes'):
             clearmem(self.ed25519_secret_bytes)
-        if hasattr(keygen, 'ed25519_secret_pem_pkcs8'):
+        if hasattr(self, 'ed25519_secret_pem_pkcs8'):
             clearmem(self.ed25519_secret_pem_pkcs8)
-        if hasattr(keygen, 'ipfs_privkey'):
+        if hasattr(self, 'ipfs_privkey'):
             clearmem(self.ipfs_privkey)
-        if hasattr(keygen, 'password'):
-            clearmem(self.password)
-        if hasattr(keygen, 'pgpy'):
-            clearmem(self.pgpy._key.keymaterial.p)
-            clearmem(self.pgpy._key.keymaterial.q)
-            clearmem(self.pgpy._key.keymaterial.s)
-        if hasattr(keygen, 'pgpy_key_seed'):
+        if hasattr(self, 'password'):
+            if self.password:
+                clearmem(self.password)
+        if hasattr(self, 'pgpy'):
+            if hasattr(self.pgpy._key.keymaterial, 'p') and not isinstance(self.pgpy._key.keymaterial.p, object):
+                clearmem(self.pgpy._key.keymaterial.p)
+            if hasattr(self.pgpy._key.keymaterial, 'q'):
+                clearmem(self.pgpy._key.keymaterial.q)
+            if hasattr(self.pgpy._key.keymaterial, 's'):
+                clearmem(self.pgpy._key.keymaterial.s)
+        if hasattr(self, 'pgpy_key_seed'):
             clearmem(self.pgpy_key_seed)
-        if hasattr(keygen, 'pgpy_key_value'):
+        if hasattr(self, 'pgpy_key_value'):
             clearmem(self.pgpy_key_value)
 
     def _invalid_type(self):
@@ -176,9 +194,7 @@ class keygen:
 
         self._check_args(args)
         self._load_config()
-        # self.gpg = gpg.Context(armor=True, offline=True, homedir=GNUPGHOME)
-        self.gpg = gpg.Context( armor=True,
-                                offline=True)
+        self.gpg = gpg.Context(armor=True, offline=True)
         self.gpg.set_passphrase_cb(self.gpg_passphrase_cb)
         self.ed25519(args)
         method = getattr(self, f'do_{self.type}', self._invalid_type)
@@ -199,12 +215,18 @@ class keygen:
             elif re.search("sec", line):
                 self.base58_secret_key = line.replace('\n','').split(': ')[1]
 
-    def do_duniter(self):
+    def do_base58(self):
         log.debug("keygen.do_duniter()")
         self.base58_from_ed25519()
         if self.output is None:
-            print("pub: %s" % self.base58_public_key)
-            print("sec: %s" % self.base58_secret_key)
+            if not self.public and not self.secret:
+                print("pub: %s" % self.base58_public_key)
+                print("sec: %s" % self.base58_secret_key)
+            else:
+                if self.public:
+                    print(self.base58_public_key)
+                if self.secret:
+                    print(self.base58_secret_key)
         else:
             with open(self.output, "w") as fh:
                 fh.write(f"""Type: PubSec
@@ -216,12 +238,21 @@ sec: {self.base58_secret_key}
             os.chmod(self.output, 0o600)
         self._cleanup()
 
+    def do_duniter(self):
+        self.do_base58()
+
     def do_ipfs(self):
         log.debug("keygen.do_ipfs()")
         self.ipfs_from_ed25519()
         if self.output is None:
-            print("PeerID: %s" % self.ipfs_peerid)
-            print("PrivKEY: %s" % self.ipfs_privkey)
+            if not self.public and not self.secret:
+                print("PeerID: %s" % self.ipfs_peerid)
+                print("PrivKEY: %s" % self.ipfs_privkey)
+            else:
+                if self.public:
+                    print(self.ipfs_peerid)
+                if self.secret:
+                    print(self.ipfs_privkey)
         else:
             # with open(self.output, "wb") as fh:
             #     fh.write(self.ipfs_libp2p_protobuf_key)
