@@ -13,16 +13,13 @@ RUN apk upgrade --no-cache \
  && apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/ --virtual .build-deps \
     build-base \
     libffi-dev \
-    protobuf \
     py3-gpgme \
     swig \
  && /usr/local/bin/python${PYTHON_RELEASE} -m venv ./ \
  && ./bin/pip${PYTHON_RELEASE} install -U pip wheel \
  && ./bin/pip${PYTHON_RELEASE} install -r ./requirements.txt \
- && wget https://raw.githubusercontent.com/libp2p/go-libp2p/master/core/crypto/pb/crypto.proto \
- && protoc --python_out=./lib/python${PYTHON_RELEASE}/site-packages/ crypto.proto \
  && cp -a /usr/lib/python${PYTHON_RELEASE}/site-packages/gpg ./lib/python${PYTHON_RELEASE}/site-packages/ \
- && rm -rf /root/.cache ./build ./crypto.proto \
+ && rm -rf /root/.cache ./build \
  && apk del --no-network .build-deps \
  && find ./lib -type f -executable -exec scanelf --needed --nobanner --format '%n#p' '{}' ';' \
      |tr ',' '\n' \
@@ -48,7 +45,7 @@ RUN apk add --no-cache \
      |tar --strip-components 1 -C /opt/shellspec -xzf - \
  && ln -s /opt/shellspec/shellspec ./bin/shellspec
 
-COPY --from=ipfs/kubo:v0.14.0 /usr/local/bin/ipfs ./bin/
+COPY --from=ipfs/kubo:v0.15.0 /usr/local/bin/ipfs ./bin/
 COPY README.md ./
 COPY COPYING ./
 COPY Makefile ./
@@ -65,6 +62,7 @@ CMD ["bash"]
 FROM dist as master
 ARG UID
 ARG USER
+ENV PATH=/opt/dpgpid/bin:$PATH
 ENV UID=${UID:-999}
 ENV USER=dpgpid
 

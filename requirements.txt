@@ -1,9 +1,7 @@
-base58
-cryptography
-duniterpy
-google
-pgpy
-pynentry
-protobuf
-pynacl
-SecureBytes
+base58==2.1.1
+cryptography==3.4.8
+duniterpy==1.1.0
+pgpy==0.5.4
+pynentry==0.1.6
+pynacl==1.5.0
+SecureBytes==0.3.5

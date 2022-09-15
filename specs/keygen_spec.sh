@@ -50,7 +50,7 @@ Describe 'keygen'
   Describe '--version:'
     It 'prints version'
       When run keygen --version
-      The output should include 'v0.0.2'
+      The output should include 'v0.0.3'
       The status should be success
       The stderr should equal ""
     End
@@ -154,14 +154,6 @@ Describe 'keygen'
       The stderr should equal ""
     End
   End
-  Describe '-t ipfs -s username password:'
-    It 'prints ipfs secret key for user "username" with password "password"'
-      When run keygen -t ipfs -s username password
-      The output should include 'CAESQA+XqCWjRqCjNe9oU3QA796bEH+T+rxgyPQ/EkXvE2MvNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
-      The status should be success
-      The stderr should equal ""
-    End
-  End
   Describe '-t ipfs -k username password:'
     It 'prints ipfs keys for user "username" with password "password"'
       When run keygen -t ipfs -k username password
@@ -176,6 +168,15 @@ Describe 'keygen'
       When run keygen -t ipfs -pk username password
       The output should include 'PeerID: 12D3KooWDMhdm5yrvtrbkshXFjkqLedHieUnPioczy9wzdnzquHC'
       The output should include 'PrivKEY: CAESQA+XqCWjRqCjNe9oU3QA796bEH+T+rxgyPQ/EkXvE2MvNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-t base64 -pk username password:'
+    It 'prints prefixed base64 keys for user "username" with password "password"'
+      When run keygen -t base64 -pk username password
+      The output should include 'pub: NJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
+      The output should include 'sec: D5eoJaNGoKM172hTdADv3psQf5P6vGDI9D8SRe8TYy80mhNu9w/6bnX5fDGuZaodo6kjVkPRRLAuOoCZXwGhqw=='
       The status should be success
       The stderr should equal ""
     End

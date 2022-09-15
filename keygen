@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # link: https://git.p2p.legal/aya/dpgpid/
-# desc: generate ed25519 keys suitable for duniter or ipfs
+# desc: generate ed25519 keys suitables for duniter or ipfs
 
 # Copyleft 2022 Yann Autissier <aya@asycn.io>
 # all crypto science belongs to Pascal Engélibert <tuxmain@zettascript.org>
@@ -27,7 +27,6 @@ import argparse
 import base58
 import base64
 import configparser
-import crypto_pb2
 import cryptography.hazmat.primitives.asymmetric.ed25519 as ed25519
 from cryptography.hazmat.primitives import serialization
 import duniterpy.key
@@ -45,19 +44,27 @@ import sys
 import time
 import warnings
 
-__version__='0.0.2'
+__version__='0.0.3'
 
 class keygen:
     def __init__(self):
-# desc: generate ed25519 keys suitable for duniter or ipfs
+# desc: generate ed25519 keys suitables for duniter or ipfs
         self.parser = argparse.ArgumentParser(description="""
-        Generate ed25519 keys. It converts your Duniter username and password or
-        a GPG key to an IPFS PeerID.""")
+        Generate ed25519 keys suitables for duniter or ipfs.
+        It converts your Duniter username and password or a GPG key to a duniter
+        pub/sec key or an IPFS PeerID/PrivateKEY.""")
         self.parser.add_argument(
             "-d",
             "--debug",
             action="store_true",
             help="show debug informations (WARNING: including SECRET KEY value)",
+        )
+        self.parser.add_argument(
+            "-f",
+            "--format",
+            dest="format",
+            default=None,
+            help="output file format: [pb2|pem|pubsec], default: pem (pkcs8)",
         )
         self.parser.add_argument(
             "-g",
@@ -108,7 +115,7 @@ class keygen:
             "--type",
             dest="type",
             default="base58",
-            help="output key type : [ base58 | duniter | ipfs ]",
+            help="output text format: [base58|base64|duniter|ipfs], default: base58",
         )
         self.parser.add_argument(
             "-v",
@@ -142,9 +149,12 @@ class keygen:
         if hasattr(self, 'armored_pgp_secret_key') and self.armored_pgp_secret_key:
             clearmem(self.armored_pgp_secret_key)
             log.debug("cleared: keygen.armored_pgp_secret_key")
-        if hasattr(self, 'base58_secret_key') and self.base58_secret_key:
-            clearmem(self.base58_secret_key)
-            log.debug("cleared: keygen.base58_secret_key")
+        if hasattr(self, 'ed25519_secret_base58') and self.ed25519_secret_base58:
+            clearmem(self.ed25519_secret_base58)
+            log.debug("cleared: keygen.ed25519_secret_base58")
+        if hasattr(self, 'ed25519_secret_base64') and self.ed25519_secret_base64:
+            clearmem(self.ed25519_secret_base64)
+            log.debug("cleared: keygen.ed25519_secret_base64")
         if hasattr(self, 'duniter'):
             if hasattr(self.duniter, 'sk') and self.duniterpy.sk:
                 clearmem(self.duniterpy.sk)
@@ -155,6 +165,9 @@ class keygen:
         if hasattr(self, 'ed25519_secret_pem_pkcs8') and self.ed25519_secret_pem_pkcs8:
             clearmem(self.ed25519_secret_pem_pkcs8)
             log.debug("cleared: keygen.ed25515_secret_pem_pkcs8")
+        if hasattr(self, 'ed25519_secret_protobuf2') and self.ed25519_secret_protobuf2:
+            clearmem(self.ed25519_secret_protobuf2)
+            log.debug("cleared: keygen.ed25515_secret_protobuf2")
         if hasattr(self, 'ipfs_privkey') and self.ipfs_privkey:
             clearmem(self.ipfs_privkey)
             log.debug("cleared: keygen.ipfs_privkey")
@@ -189,6 +202,46 @@ class keygen:
         log.debug("config_dir=%s" % config_dir)
         self.config.read( [config_dir + '/keygen.conf'] )
 
+    def _output(self, public_key, secret_key, public_key_prefix, secret_key_prefix):
+        log.debug("keygen._output()")
+        if self.output is None:
+            self._output_text(public_key, secret_key, public_key_prefix, secret_key_prefix)
+        else:
+            self._output_file()
+            os.chmod(self.output, 0o600)
+        self._cleanup()
+
+    def _output_file(self):
+        log.debug("keygen._output_file()")
+        if self.format == 'pb2':
+            if not hasattr(self, 'ed25519_secret_protobuf2'):
+                self.protobuf2_from_ed25519()
+            with open(self.output, "wb") as fh:
+                fh.write(self.ed25519_secret_protobuf2)
+        elif self.format == 'pubsec':
+            if not hasattr(self, 'ed25519_public_base58') or not hasattr(self, 'ed25519_secret_base58'):
+                self.base58_from_ed25519()
+            with open(self.output, "w") as fh:
+                fh.write(
+f"""Type: PubSec
+Version: 1
+pub: {self.ed25519_public_base58}
+sec: {self.ed25519_secret_base58}
+"""
+                )
+        else:
+            if not hasattr(self, 'ed25519_secret_pem_pkcs8'):
+                self.pem_pkcs8_from_ed25519()
+            with open(self.output, "w") as fh:
+                fh.write(self.ed25519_secret_pem_pkcs8)
+
+    def _output_text(self, public_key, secret_key, public_key_prefix, secret_key_prefix):
+        log.debug("keygen._output_text()")
+        if self.keys or not self.secret:
+            print("%s" % ''.join([self.prefix * public_key_prefix, public_key]))
+        if self.keys or self.secret:
+            print("%s" % ''.join([self.prefix * secret_key_prefix, secret_key]))
+
     def _run(self, argv):
         args = self.parser.parse_args(argv)
         vars(self).update(vars(args))
@@ -222,56 +275,46 @@ class keygen:
 
     def base58_from_ed25519(self):
         log.debug("keygen.base58_from_ed25519()")
-        self.base58_public_key = base58.b58encode(self.ed25519_public_bytes).decode('ascii')
-        self.base58_secret_key = base58.b58encode(self.ed25519_secret_bytes).decode('ascii')
-        log.debug("keygen.base58_public_key=%s" % self.base58_public_key)
-        log.debug("keygen.base58_secret_key=%s" % self.base58_secret_key)
+        self.ed25519_public_base58 = base58.b58encode(self.ed25519_public_bytes).decode('ascii')
+        log.debug("keygen.ed25519_public_base58=%s" % self.ed25519_public_base58)
+        self.ed25519_secret_base58 = base58.b58encode(self.ed25519_secret_bytes).decode('ascii')
+        log.debug("keygen.ed25519_secret_base58=%s" % self.ed25519_secret_base58)
+
+    def base64_from_ed25519(self):
+        log.debug("keygen.base64_from_ed25519()")
+        self.ed25519_public_base64 = base64.b64encode(self.ed25519_public_bytes).decode('ascii')
+        log.debug("keygen.ed25519_public_base64=%s" % self.ed25519_public_base64)
+        self.ed25519_secret_base64 = base64.b64encode(self.ed25519_secret_bytes).decode('ascii')
+        log.debug("keygen.ed25519_secret_base64=%s" % self.ed25519_secret_base64)
 
     def base58_from_pubsec(self):
         log.debug("keygen.base58_from_pubsec()")
         for line in open(self.input, "r"):
             if re.search("pub", line):
-                self.base58_public_key = line.replace('\n','').split(': ')[1]
+                self.ed25519_public_base58 = line.replace('\n','').split(': ')[1]
             elif re.search("sec", line):
-                self.base58_secret_key = line.replace('\n','').split(': ')[1]
+                self.ed25519_secret_base58 = line.replace('\n','').split(': ')[1]
 
     def do_base58(self):
-        log.debug("keygen.do_duniter()")
+        log.debug("keygen.do_base58()")
         self.base58_from_ed25519()
-        if self.output is None:
-            if self.keys or not self.secret:
-                print("%s" % ''.join([self.prefix * 'pub: ', self.base58_public_key]))
-            if self.keys or self.secret:
-                print("%s" % ''.join([self.prefix * 'sec: ', self.base58_secret_key]))
-        else:
-            with open(self.output, "w") as fh:
-                fh.write(f"""Type: PubSec
-Version: 1
-pub: {self.base58_public_key}
-sec: {self.base58_secret_key}
-"""
-                )
-            os.chmod(self.output, 0o600)
-        self._cleanup()
+        self._output(self.ed25519_public_base58, self.ed25519_secret_base58, 'pub: ', 'sec: ')
+
+    def do_base64(self):
+        log.debug("keygen.do_base64()")
+        self.base64_from_ed25519()
+        self._output(self.ed25519_public_base64, self.ed25519_secret_base64, 'pub: ', 'sec: ')
 
     def do_duniter(self):
+        if not self.format:
+            self.format = 'pubsec'
         self.do_base58()
 
     def do_ipfs(self):
         log.debug("keygen.do_ipfs()")
-        self.ipfs_from_ed25519()
-        if self.output is None:
-            if self.keys or not self.secret:
-                print("%s" % ''.join(['PeerID: ' * self.prefix, self.ipfs_peerid]))
-            if self.keys or self.secret:
-                print("%s" % ''.join(['PrivKEY: ' * self.prefix, self.ipfs_privkey]))
-        else:
-            # with open(self.output, "wb") as fh:
-            #     fh.write(self.ipfs_libp2p_protobuf_key)
-            with open(self.output, "w") as fh:
-                fh.write(self.ed25519_secret_pem_pkcs8)
-            os.chmod(self.output, 0o600)
-        self._cleanup()
+        self.protobuf2_from_ed25519()
+        self.ipfs_from_protobuf2()
+        self._output(self.ipfs_peerid, self.ipfs_privkey, 'PeerID: ', 'PrivKEY: ')
 
     def duniterpy_from_salt_and_password(self):
         log.debug("keygen.duniterpy_from_salt_and_password()")
@@ -310,8 +353,8 @@ sec: {self.base58_secret_key}
 
     def ed25519_from_base58(self):
         log.debug("keygen.ed25519_from_base58()")
-        self.ed25519_public_bytes = base58.b58decode(self.base58_public_key)
-        self.ed25519_secret_bytes = base58.b58decode(self.base58_secret_key)
+        self.ed25519_public_bytes = base58.b58decode(self.ed25519_public_base58)
+        self.ed25519_secret_bytes = base58.b58decode(self.ed25519_secret_base58)
         log.debug("keygen.ed25519_public_bytes=%s" % self.ed25519_public_bytes)
         log.debug("keygen.ed25519_secret_bytes=%s" % self.ed25519_secret_bytes)
 
@@ -324,6 +367,11 @@ sec: {self.base58_secret_key}
 
     def ed25519_from_gpg(self):
         log.debug("keygen.ed25519_from_gpg()")
+        self.pgpy_from_gpg()
+        self.ed25519_from_pgpy()
+
+    def pgpy_from_gpg(self):
+        log.debug("keygen.pgpy_from_gpg()")
         self.gpg_seckeys = list(self.gpg.keylist(pattern=self.username, secret=True))
         log.debug("keygen.gpg_seckeys=%s" % self.gpg_seckeys)
         if not self.gpg_seckeys:
@@ -354,7 +402,6 @@ sec: {self.base58_secret_key}
             # SymmetricKeyAlgorithm IDEA, CAST5 and Blowfish (PGPy v0.5.4)
             warnings.simplefilter('ignore')
             self.pgpy, _ = pgpy.PGPKey.from_blob(self.armored_pgp_secret_key)
-        self.ed25519_from_pgpy()
 
     def ed25519_from_pgpy(self):
         log.debug("keygen.ed25519_from_pgpy()")
@@ -396,26 +443,16 @@ sec: {self.base58_secret_key}
         log.debug("keygen.gpg_passphrase_cb(%s, %s, %s)" % (uid_hint, passphrase_info, prev_was_bad))
         return self.password
 
-    def ipfs_from_ed25519(self):
-        log.debug("keygen.ipfs_from_ed25519()")
+    def ipfs_from_protobuf2(self):
+        log.debug("keygen.ipfs_from_protobuf2()")
 
         # PeerID
-        ipfs_pid = base58.b58encode(b'\x00$\x08\x01\x12 ' + self.ed25519_public_bytes)
-        self.ipfs_peerid = ipfs_pid.decode('ascii')
+        self.ipfs_peerid = base58.b58encode(self.ed25519_public_protobuf2).decode('ascii')
         log.debug("keygen.ipfs_peerid=%s" % self.ipfs_peerid)
 
         # PrivKey
-        pkey = crypto_pb2.PrivateKey()
-        pkey.Type = crypto_pb2.KeyType.Ed25519
-        pkey.Data = self.ed25519_secret_bytes
-        self.ipfs_privkey = base64.b64encode(pkey.SerializeToString()).decode('ascii')
+        self.ipfs_privkey = base64.b64encode(self.ed25519_secret_protobuf2).decode('ascii')
         log.debug("keygen.ipfs_privkey=%s" % self.ipfs_privkey)
-
-        # libp2p-protobuf-cleartext format for ipfs key import
-        self.ipfs_libp2p_protobuf_key = pkey.SerializeToString()
-
-        # pem-pkcs8-cleartext format for ipfs key import
-        self.pem_pkcs8_from_ed25519()
 
     def pem_pkcs8_from_ed25519(self):
         log.debug("keygen.pem_pkcs8_from_ed25519()")
@@ -467,9 +504,17 @@ sec: {self.base58_secret_key}
             self.pgpy_key_type = 'undefined'
         log.debug("keygen.pgpy_key_type=%s" % self.pgpy_key_type)
 
+    def protobuf2_from_ed25519(self):
+        # libp2p protobuf version 2
+        log.debug("keygen.protobuf2_from_ed25519()")
+        self.ed25519_public_protobuf2 = b'\x00$\x08\x01\x12 ' + self.ed25519_public_bytes
+        self.ed25519_secret_protobuf2 = b'\x08\x01\x12@' + self.ed25519_secret_bytes
+        log.debug("keygen.ed25519_public_protobuf2=%s" % self.ed25519_public_protobuf2)
+        log.debug("keygen.ed25519_secret_protobuf2=%s" % self.ed25519_secret_protobuf2)
+
+##
 # long_to_bytes comes from PyCrypto, which is released into Public Domain
 # https://github.com/dlitz/pycrypto/blob/master/lib/Crypto/Util/number.py
-
 def bytes_to_long(s):
     """bytes_to_long(string) : long
     Convert a byte string to a long integer.
