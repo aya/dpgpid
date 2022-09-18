@@ -28,7 +28,7 @@ $ dpgpid show
 
 ### keygen
 
-keygen helps you to generate an ed25519 key in different formats
+keygen helps you to generate or convert an ed25519 key in different formats.
 
 * Show duniter public key for user "username" and password "password"
 
@@ -42,10 +42,28 @@ $ keygen username password
 $ keygen -pk -t ipfs username password
 ```
 
-* Show duniter public and secret keys for GPG key matching uid "username" and protected with password "password"
+* Show duniter public and secret keys for GPG key matching uid "username" and locked with password "password"
 
 ```shell
 $ keygen -pkg username password
+```
+
+* Write secret key to a pem pkcs8 file for user "username" and password "password"
+
+```shell
+$ keygen -o /tmp/ipns.pem username password
+```
+
+* Write secret key to a wif file for user "username" and password "password"
+
+```shell
+$ keygen -f wif -o /tmp/duniter.wif username password
+```
+
+* Write base58 public and secret keys to a pubsec file for user "username" and password "password"
+
+```shell
+$ keygen -f pubsec -o /tmp/duniter.pubsec username password
 ```
 
 ## Tests

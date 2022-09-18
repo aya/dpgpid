@@ -1,9 +1,16 @@
 #shellcheck shell=sh
 set -eu
 
-PB2_FILE="${SHELLSPEC_TMPBASE}/key.pb2"
-PEM_FILE="${SHELLSPEC_TMPBASE}/key.pem"
-PUBSEC_FILE="${SHELLSPEC_TMPBASE}/key.pubsec"
+CRED_FILE="${SHELLSPEC_TMPBASE}/credentials"
+DUBP_FILE="${SHELLSPEC_TMPBASE}/mnemonic"
+EWIF_FILE="${SHELLSPEC_TMPBASE}/ed25519.ewif"
+NACL_FILE="${SHELLSPEC_TMPBASE}/ed25519.nacl"
+PB2_FILE="${SHELLSPEC_TMPBASE}/ed25519.pb2"
+PEM_FILE="${SHELLSPEC_TMPBASE}/ed25519.pem"
+PUBSEC_FILE="${SHELLSPEC_TMPBASE}/ed25519.pubsec"
+SEED_FILE="${SHELLSPEC_TMPBASE}/ed25519.seed"
+SSB_FILE="${SHELLSPEC_TMPBASE}/ed25519.ssb"
+WIF_FILE="${SHELLSPEC_TMPBASE}/ed25519.wif"
 
 gpg() {
   GNUPGHOME="${SHELLSPEC_TMPBASE}" command gpg "$@"
@@ -50,13 +57,13 @@ Describe 'keygen'
   Describe '--version:'
     It 'prints version'
       When run keygen --version
-      The output should include 'v0.0.3'
+      The output should include 'v0.0.4'
       The status should be success
       The stderr should equal ""
     End
   End
   Describe 'username password:'
-    It 'prints base58 public key for user "username" with password "password"'
+    It 'prints base58 public key for user "username" and password "password"'
       When run keygen username password
       The output should include '4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The status should be success
@@ -64,7 +71,7 @@ Describe 'keygen'
     End
   End
   Describe '-p username password:'
-    It 'prints prefixed base58 public key for user "username" with password "password"'
+    It 'prints prefixed base58 public key for user "username" and password "password"'
       When run keygen -p username password
       The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The status should be success
@@ -72,7 +79,7 @@ Describe 'keygen'
     End
   End
   Describe '-s username password:'
-    It 'prints base58 secret key for user "username" with password "password"'
+    It 'prints base58 secret key for user "username" and password "password"'
       When run keygen -s username password
       The output should include 'K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
       The status should be success
@@ -80,7 +87,7 @@ Describe 'keygen'
     End
   End
   Describe '-ps username password:'
-    It 'prints prefixed base58 secret key for user "username" with password "password"'
+    It 'prints prefixed base58 secret key for user "username" and password "password"'
       When run keygen -ps username password
       The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
       The status should be success
@@ -88,7 +95,7 @@ Describe 'keygen'
     End
   End
   Describe '-k username password:'
-    It 'prints base58 public and secret keys for user "username" with password "password"'
+    It 'prints base58 public and secret keys for user "username" and password "password"'
       When run keygen -k username password
       The output should include '4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The output should include 'K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
@@ -97,7 +104,7 @@ Describe 'keygen'
     End
   End
   Describe '-pk username password:'
-    It 'prints prefixed base58 public and secret keys for user "username" with password "password"'
+    It 'prints prefixed base58 public and secret keys for user "username" and password "password"'
       When run keygen -pk username password
       The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
@@ -106,7 +113,7 @@ Describe 'keygen'
     End
   End
   Describe '-t base58 -pk username password:'
-    It 'prints prefixed base58 public and secret keys for user "username" with password "password"'
+    It 'prints prefixed base58 public and secret keys for user "username" and password "password"'
       When run keygen -t base58 -pk username password
       The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
@@ -115,7 +122,7 @@ Describe 'keygen'
     End
   End
   Describe '-t base64 -pk username password:'
-    It 'prints prefixed base64 public and secret keys for user "username" with password "password"'
+    It 'prints prefixed base64 public and secret keys for user "username" and password "password"'
       When run keygen -t base64 -pk username password
       The output should include 'pub: NJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
       The output should include 'sec: D5eoJaNGoKM172hTdADv3psQf5P6vGDI9D8SRe8TYy80mhNu9w/6bnX5fDGuZaodo6kjVkPRRLAuOoCZXwGhqw=='
@@ -124,7 +131,7 @@ Describe 'keygen'
     End
   End
   Describe '-t duniter -pk username password:'
-    It 'prints prefixed duniter public and secret keys for user "username" with password "password"'
+    It 'prints prefixed duniter public and secret keys for user "username" and password "password"'
       When run keygen -t duniter -pk username password
       The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
@@ -133,7 +140,7 @@ Describe 'keygen'
     End
   End
   Describe '-t ipfs -pk username password:'
-    It 'prints prefixed ipfs public and secret keys for user "username" with password "password"'
+    It 'prints prefixed ipfs public and secret keys for user "username" and password "password"'
       When run keygen -t ipfs -pk username password
       The output should include 'PeerID: 12D3KooWDMhdm5yrvtrbkshXFjkqLedHieUnPioczy9wzdnzquHC'
       The output should include 'PrivKEY: CAESQA+XqCWjRqCjNe9oU3QA796bEH+T+rxgyPQ/EkXvE2MvNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
@@ -141,9 +148,82 @@ Describe 'keygen'
       The stderr should equal ""
     End
   End
+  Describe '-pkm "tongue cute mail ...":'
+    It 'prints prefixed base58 public and secret keys for mnemonic "tongue cute mail ..."'
+      When run keygen -pkm "tongue cute mail fossil great frozen same social weasel impact brush kind"
+      The output should include 'pub: 732SSfuwjB7jkt9th1zerGhphs6nknaCBCTozxUcPWPU'
+      The output should include 'sec: 4NHNg9KSp81nXAN4Gmwx4EZ9bCdahnJ9jozJa1cGj9oDvzx9kCtNSvasqTZVm6VJXBQxyakZ5uZnj8AS6g87kK3x'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe "-pki ${CRED_FILE}"
+    printf 'username\npassword\n' > "${CRED_FILE}"
+    It 'prints prefixed base58 public and secret keys for username and password read from credentials file"'
+      When run keygen -pki "${CRED_FILE}" -v
+      The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should include 'input file format detected: credentials'
+    End
+    rm -f "${CRED_FILE}"
+  End
+  Describe "-pki ${DUBP_FILE}"
+    printf 'tongue cute mail fossil great frozen same social weasel impact brush kind\n' > "${DUBP_FILE}"
+    It 'prints prefixed base58 public and secret keys for mnemonic read from dubp file"'
+      When run keygen -pki "${DUBP_FILE}" -v
+      The output should include 'pub: 732SSfuwjB7jkt9th1zerGhphs6nknaCBCTozxUcPWPU'
+      The output should include 'sec: 4NHNg9KSp81nXAN4Gmwx4EZ9bCdahnJ9jozJa1cGj9oDvzx9kCtNSvasqTZVm6VJXBQxyakZ5uZnj8AS6g87kK3x'
+      The status should be success
+      The stderr should include 'input file format detected: mnemonic'
+    End
+    rm -f "${DUBP_FILE}"
+  End
+  Describe "-f nacl -o ${NACL_FILE} username password:"
+    rm -f "${NACL_FILE}"
+    It 'writes secret key to a libnacl file for user "username" and password "password"'
+      When run keygen -f nacl -o "${NACL_FILE}" username password
+      The path "${NACL_FILE}" should exist
+      The contents of file "${NACL_FILE}" should include '{"priv": "0f97a825a346a0a335ef68537400efde9b107f93fabc60c8f43f1245ef13632f349a136ef70ffa6e75f97c31ae65aa1da3a9235643d144b02e3a80995f01a1ab", "verify": "349a136ef70ffa6e75f97c31ae65aa1da3a9235643d144b02e3a80995f01a1ab", "sign": "0f97a825a346a0a335ef68537400efde9b107f93fabc60c8f43f1245ef13632f"}'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe "-pki ${NACL_FILE}:"
+    It 'prints prefixed base58 public and secret keys for ed25519 key read from libnacl file"'
+      When run keygen -pki "${NACL_FILE}" -v
+      The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should include 'input file format detected: nacl'
+    End
+    rm -f "${NACL_FILE}"
+  End
+  Describe "-f ewif -o ${EWIF_FILE} username password:"
+    rm -f "${EWIF_FILE}"
+    It 'writes encrypted secret key to a ewif file for user "username" and password "password"'
+      When run keygen -f ewif -o "${EWIF_FILE}" username password
+      The path "${EWIF_FILE}" should exist
+      The contents of file "${EWIF_FILE}" should include 'Type: EWIF'
+      The contents of file "${EWIF_FILE}" should include 'Version: 1'
+      The contents of file "${EWIF_FILE}" should include 'Data: 2w6iPHHjrfGT3HWvNV1cw3ZpGXAAQtfYzRxDXUkyW2y5WBorLtDUY'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe "-pki ${EWIF_FILE}:"
+    It 'prints prefixed base58 public and secret keys for ed25519 key read from EWIF file"'
+      When run keygen -pki "${EWIF_FILE}" -v username password
+      The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should include 'input file format detected: ewif'
+    End
+    rm -f "${EWIF_FILE}"
+  End
   Describe "-o ${PEM_FILE} username password:"
     rm -f "${PEM_FILE}"
-    It 'writes pkcs8 secret key to a pem file for user "username" with password "password"'
+    It 'writes pkcs8 secret key to a pem file for user "username" and password "password"'
       When run keygen -o "${PEM_FILE}" -t ipfs username password
       The path "${PEM_FILE}" should exist
       The contents of file "${PEM_FILE}" should include '-----BEGIN PRIVATE KEY-----'
@@ -155,7 +235,7 @@ Describe 'keygen'
   End
   Describe "-f pem -o ${PEM_FILE} username password:"
     rm -f "${PEM_FILE}"
-    It 'writes pkcs8 secret key to a pem file for user "username" with password "password"'
+    It 'writes pkcs8 secret key to a pem file for user "username" and password "password"'
       When run keygen -f pem -o "${PEM_FILE}" -t ipfs username password
       The path "${PEM_FILE}" should exist
       The contents of file "${PEM_FILE}" should include '-----BEGIN PRIVATE KEY-----'
@@ -165,9 +245,19 @@ Describe 'keygen'
       The stderr should equal ""
     End
   End
+  Describe "-pki ${PEM_FILE}:"
+    It 'prints prefixed base58 public and secret keys for ed25519 key read from pkcs8 pem file"'
+      When run keygen -pki "${PEM_FILE}" -v
+      The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should include 'input file format detected: pem'
+    End
+    rm -f "${PEM_FILE}"
+  End
   Describe "-f pb2 -o ${PB2_FILE} username password:"
     rm -f "${PB2_FILE}"
-    It 'writes protobuf2 secret key to a pb2 file for user "username" with password "password"'
+    It 'writes protobuf2 secret key to a pb2 file for user "username" and password "password"'
       decode_pb2() {
         xxd -ps "${PB2_FILE}"
       }
@@ -183,10 +273,11 @@ Describe 'keygen'
       The status should be success
       The stderr should equal ""
     End
+    rm -f "${PB2_FILE}"
   End
   Describe "-f pubsec -o ${PUBSEC_FILE} username password:"
     rm -f "${PUBSEC_FILE}"
-    It 'writes base58 public and secret keys to a pubsec file for user "username" with password "password"'
+    It 'writes base58 public and secret keys to a pubsec file for user "username" and password "password"'
       When run keygen -f pubsec -o "${PUBSEC_FILE}" username password
       The path "${PUBSEC_FILE}" should exist
       The contents of file "${PUBSEC_FILE}" should include 'Type: PubSec'
@@ -199,7 +290,7 @@ Describe 'keygen'
   End
   Describe "-o ${PUBSEC_FILE} -t duniter username password:"
     rm -f "${PUBSEC_FILE}"
-    It 'writes duniter public and secret keys to a pubsec file for user "username" with password "password"'
+    It 'writes duniter public and secret keys to a pubsec file for user "username" and password "password"'
       When run keygen -o "${PUBSEC_FILE}" -t duniter username password
       The path "${PUBSEC_FILE}" should exist
       The contents of file "${PUBSEC_FILE}" should include 'Type: PubSec'
@@ -210,17 +301,71 @@ Describe 'keygen'
       The stderr should equal ""
     End
   End
-  Describe "-i ${PUBSEC_FILE} -t ipfs -pk:"
+  Describe "-pki ${PUBSEC_FILE} -t ipfs:"
     It 'prints prefixed ipfs public and secret keys for base58 keys read in a pubsec file'
-      When run keygen -i "${PUBSEC_FILE}" -t ipfs -pk
+      When run keygen -pki "${PUBSEC_FILE}" -t ipfs -v
       The output should include 'PeerID: 12D3KooWDMhdm5yrvtrbkshXFjkqLedHieUnPioczy9wzdnzquHC'
       The output should include 'PrivKEY: CAESQA+XqCWjRqCjNe9oU3QA796bEH+T+rxgyPQ/EkXvE2MvNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
+      The status should be success
+      The stderr should include 'input file format detected: pubsec'
+    End
+    rm -f "${PUBSEC_FILE}"
+  End
+  Describe "-pki ${SSB_FILE}:"
+    printf '{ "curve": "ed25519", "public": "cFVodZoKwLcmXbM6UeASdl8+7+Uo8PNOuFnlcqk7qUc=.ed25519", "private": "lUqlXYxjkM0/ljtGnwoM0CfP6ORA2DKZnzsQ4dJ1tKJwVWh1mgrAtyZdszpR4BJ2Xz7v5Sjw8064WeVyqTupRw==.ed25519", "id": "@cFVodZoKwLcmXbM6UeASdl8+7+Uo8PNOuFnlcqk7qUc=.ed25519" }\n' > "${SSB_FILE}"
+    It 'prints prefixed base58 public and secret keys for ed25519 key read from ssb file"'
+      When run keygen -pki "${SSB_FILE}" -v
+      The output should include 'pub: 8ZWCTFBUczYRucyvTgJL6oefj28u243LYU4ZjYKn4XDG'
+      The output should include 'sec: 3z7vcMHQhnVPTEEaFQ5gxn2NHkmJsFHkZ4W2aoAvt3Jt5ZYhFV1M6NEkm7Lr75pEF61oSkQVsaih9cQWBP2JmbVQ'
+      The status should be success
+      The stderr should include 'input file format detected: ssb'
+    End
+    rm -f "${SSB_FILE}"
+  End
+  Describe "-f seed -o ${SEED_FILE} username password:"
+    rm -f "${SEED_FILE}"
+    It 'writes encoded secret key to a wif file for user "username" and password "password"'
+      When run keygen -f seed -o "${SEED_FILE}" username password
+      The path "${SEED_FILE}" should exist
+      The contents of file "${SEED_FILE}" should include '0f97a825a346a0a335ef68537400efde9b107f93fabc60c8f43f1245ef13632f'
       The status should be success
       The stderr should equal ""
     End
   End
+  Describe "-pki ${SEED_FILE}:"
+    It 'prints prefixed base58 public and secret keys for ed25519 key read from seed file"'
+      When run keygen -pki "${SEED_FILE}" -v
+      The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should include 'input file format detected: seed'
+    End
+    rm -f "${SEED_FILE}"
+  End
+  Describe "-f wif -o ${WIF_FILE} username password:"
+    rm -f "${WIF_FILE}"
+    It 'writes encoded secret key to a wif file for user "username" and password "password"'
+      When run keygen -f wif -o "${WIF_FILE}" username password
+      The path "${WIF_FILE}" should exist
+      The contents of file "${WIF_FILE}" should include 'Type: WIF'
+      The contents of file "${WIF_FILE}" should include 'Version: 1'
+      The contents of file "${WIF_FILE}" should include 'Data: 7972e1McMMURp9R1MDCH1UMEEnF2bKAjc2WtEW3JyAVwMVT'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe "-pki ${WIF_FILE}:"
+    It 'prints prefixed base58 public and secret keys for ed25519 key read from WIF file"'
+      When run keygen -pki "${WIF_FILE}" -v
+      The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should include 'input file format detected: wif'
+    End
+    rm -f "${WIF_FILE}"
+  End
   Describe '-t gpg username password birthday:'
-    It 'creates a password protected gpg key for user username'
+    It 'creates a password protected gpg key for user "username"'
       Skip "You should implement it !"
       When run keygen -t pgp username password birthday
       The status should be success
@@ -228,7 +373,7 @@ Describe 'keygen'
   End
   Describe '-pkg username:'
     gpg --batch --import --quiet specs/username.asc
-    It 'prints prefixed base58 public and secret keys for ed25519 gpg key matching "username"'
+    It 'prints prefixed base58 public and secret keys for ed25519 gpg key matching uid "username"'
       When run keygen -pkg username
       The output should include 'pub: 2g5UL2zhkn5i7oNYDpWo3fBuWvRYVU1AbMtdVmnGzPNv'
       The output should include 'sec: 5WtYFfA26nTfG496gAKhkrLYUMMnwXexmE1E8Q7PvtQEyscHfirsdMzW34zDp7WEkt3exNEVwoG4ajZYrm62wpi2'
@@ -239,7 +384,7 @@ Describe 'keygen'
   End
   Describe '-pkg username@protected password:'
     gpg --batch --import --quiet specs/username_protected.asc
-    It 'prints prefixed public and secret keys for ed25519 gpg key matching "username@protected" locked with "password"'
+    It 'prints prefixed public and secret keys for ed25519 gpg key matching uid "username@protected" and locked with password "password"'
       When run keygen -pkg username@protected password
       The output should include 'pub: C1cRu7yb5rZhsmRHQkeZxusAhtYYJypcnXpY3HycEKsU'
       The output should include 'sec: VWaEdDroSCoagJDsBnDNUtXJtKAJYdqL6XKNiomz8DtiyF44FvpiMmhidXt2j8HhDBKPZ67xBGcZPnj4Myk6cB8'
@@ -250,7 +395,7 @@ Describe 'keygen'
   End
   Describe '-pkg usersame:'
     gpg --batch --import --quiet specs/usersame.asc
-    It 'prints prefixed base58 public and secret keys for rsa gpg key matching "usersame"'
+    It 'prints prefixed base58 public and secret keys for rsa gpg key matching uid "usersame"'
       When run keygen -pkg usersame
       The output should include 'pub: 4NxSjjys6bo8mhM919MkvNkNPFu4zpFyxu1r7yJ39K87'
       The output should include 'sec: 2cLFNeXiqcKKv5BF9JVTwtWmFHLvjDkJkrCyQbST9oYbsQLHsVaUAzbwrv5YfzQcPHu6e6XUzdstKy4kLhgDSGiw'
@@ -261,7 +406,7 @@ Describe 'keygen'
   End
   Describe '-pkg usersame@protected password:'
     gpg --batch --import --quiet specs/usersame_protected.asc
-    It 'prints prefixed public and secret keys for rsa gpg key matching "usersame@protected" locked with "password"'
+    It 'prints prefixed public and secret keys for rsa gpg key matching uid "usersame@protected" and locked with password "password"'
       When run keygen -pkg usersame@protected password
       The output should include 'pub: 5kh2uqNTuYsLN7fwSRP3JWM4Hotcpdkb7frRNZwo9BPp'
       The output should include 'sec: LdWjjkP7gRzH4k4gNkQs2er26bE2Dhz7cGPE8fMNixe1Uv2ZHbo1QtyZxmDeTP77y6HVLbHNoXdMTHdo6ip9PHk'
@@ -269,5 +414,20 @@ Describe 'keygen'
       The stderr should equal ""
     End
     gpg --batch --delete-secret-and-public-key --yes 78BC5CD37664E5C1AA85AC97ABC22BF0C070C9AD
+  End
+  Describe "-g -o ${PUBSEC_FILE} -t duniter username:"
+    rm -f "${PUBSEC_FILE}"
+    gpg --batch --import --quiet specs/username.asc
+    It 'writes duniter public and secret keys to a pubsec file for gpg key matching uid "username"'
+      When run keygen -g -o "${PUBSEC_FILE}" -t duniter username
+      The path "${PUBSEC_FILE}" should exist
+      The contents of file "${PUBSEC_FILE}" should include 'Type: PubSec'
+      The contents of file "${PUBSEC_FILE}" should include 'Version: 1'
+      The contents of file "${PUBSEC_FILE}" should include 'pub: 2g5UL2zhkn5i7oNYDpWo3fBuWvRYVU1AbMtdVmnGzPNv'
+      The contents of file "${PUBSEC_FILE}" should include 'sec: 5WtYFfA26nTfG496gAKhkrLYUMMnwXexmE1E8Q7PvtQEyscHfirsdMzW34zDp7WEkt3exNEVwoG4ajZYrm62wpi2'
+      The status should be success
+      The stderr should equal ""
+    End
+    gpg --batch --delete-secret-and-public-key --yes 4D1CDB77E91FFCD81B10F9A7079E5BF4721944FB
   End
 End
