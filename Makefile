@@ -1,10 +1,12 @@
-MYOS ?= ../myos
--include $(MYOS)/make/include.mk
-
-PREFIX ?= /usr/local
-BINDIR ?= $(PREFIX)/bin
-
+BINDIR                          ?= $(PREFIX)/bin
+PREFIX                          ?= /usr/local
 .PHONY: all default install shellcheck-% shellspec-% tests uninstall
+
+-include $(MYOS)/make/include.mk
+MYOS                            ?= ../myos
+MYOS_REPOSITORY                 ?= $(patsubst %/dpgpid,%/myos,$(shell git config --get remote.origin.url 2>/dev/null))
+$(MYOS):
+	  -@git clone $(MYOS_REPOSITORY) $(MYOS)
 
 default: tests
 
@@ -13,6 +15,8 @@ all: install tests
 install:
 	mkdir -p "$(BINDIR)"
 	install dpgpid "$(BINDIR)/dpgpid"
+	install keygen "$(BINDIR)/keygen"
+	pip install -r requirements.txt
 
 shellcheck-%:
 	shellcheck $*/*.sh
@@ -24,3 +28,4 @@ tests: shellcheck-specs shellspec-specs
 
 uninstall:
 	rm -f "$(BINDIR)/dpgpid"
+	rm -f "$(BINDIR)/keygen"
