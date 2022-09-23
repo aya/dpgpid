@@ -1,12 +1,12 @@
+.PHONY: all default install shellcheck-% shellspec-% tests uninstall
 BINDIR                          ?= $(PREFIX)/bin
 PREFIX                          ?= /usr/local
-.PHONY: all default install shellcheck-% shellspec-% tests uninstall
 
--include $(MYOS)/make/include.mk
 MYOS                            ?= ../myos
 MYOS_REPOSITORY                 ?= $(patsubst %/dpgpid,%/myos,$(shell git config --get remote.origin.url 2>/dev/null))
 $(MYOS):
 	  -@git clone $(MYOS_REPOSITORY) $(MYOS)
+-include $(MYOS)/make/include.mk
 
 default: tests
 
@@ -19,10 +19,10 @@ install:
 	pip install -r requirements.txt
 
 shellcheck-%:
-	shellcheck $*/*.sh
+	@shellcheck $*/*.sh
 
 shellspec-%:
-	shellspec -f tap $*
+	@shellspec -f tap $*
 
 tests: shellcheck-specs shellspec-specs
 

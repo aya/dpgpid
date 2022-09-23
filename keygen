@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # link: https://git.p2p.legal/aya/dpgpid/
-# desc: generate ed25519 keys suitables for duniter or ipfs
+# desc: generate ed25519 keys for duniter and ipfs from gpg
 
 # Copyleft 2022 Yann Autissier <aya@asycn.io>
 # all crypto science belongs to Pascal Engélibert <tuxmain@zettascript.org>
@@ -48,11 +48,10 @@ __version__='0.0.4'
 
 class keygen:
     def __init__(self):
-        # desc: generate ed25519 keys suitables for duniter or ipfs
         self.parser = argparse.ArgumentParser(description="""
-        Generate ed25519 keys suitables for duniter and ipfs.
-        It converts an ed25519 key, duniter username/password, or a GPG key, to
-        a duniter wallet or an IPFS PeerID/PrivateKEY.""")
+        Generate ed25519 keys for duniter and ipfs from gpg.
+        It converts a gpg key, a duniter username/password, or any ed25519 key to
+        a duniter wallet or an IPFS key.""")
         self.parser.add_argument(
             "-d",
             "--debug",
@@ -77,7 +76,7 @@ class keygen:
             "--input",
             dest="input",
             default=None,
-            help="read ed25519 key from file INPUT, autodetect format: [credentials|ewif|libnacl|mnemonic|pubsec|seedhex|wif]",
+            help="read ed25519 key from file INPUT, autodetect format: [credentials|ewif|nacl|mnemonic|pb2|pubsec|seed|wif]",
         )
         self.parser.add_argument(
             "-k",
@@ -121,7 +120,7 @@ class keygen:
             "--type",
             dest="type",
             default="base58",
-            help="output text format: [base58|base64|duniter|ipfs], default: base58",
+            help="output text format: [b58mh|b64mh|base58|base64|duniter|ipfs], default: base58",
         )
         self.parser.add_argument(
             "-v",
@@ -173,9 +172,9 @@ class keygen:
         if hasattr(self, 'ed25519_secret_pem_pkcs8') and self.ed25519_secret_pem_pkcs8:
             clearmem(self.ed25519_secret_pem_pkcs8)
             log.debug("cleared: keygen.ed25515_secret_pem_pkcs8")
-        if hasattr(self, 'ed25519_secret_protobuf2') and self.ed25519_secret_protobuf2:
-            clearmem(self.ed25519_secret_protobuf2)
-            log.debug("cleared: keygen.ed25515_secret_protobuf2")
+        if hasattr(self, 'ed25519_secret_protobuf') and self.ed25519_secret_protobuf:
+            clearmem(self.ed25519_secret_protobuf)
+            log.debug("cleared: keygen.ed25515_secret_protobuf")
         if hasattr(self, 'ed25519_seed_bytes') and self.ed25519_seed_bytes:
             clearmem(self.ed25519_seed_bytes)
             log.debug("cleared: keygen.ed25519_seed_bytes")
@@ -238,17 +237,17 @@ class keygen:
                     except pynentry.PinEntryCancelled:
                         log.warning('Cancelled! Goodbye.')
                         self._cleanup()
-                        exit(2)
+                        exit(1)
             self.duniterpy.save_ewif_file(self.output, self.password)
         elif self.format == 'nacl':
             if not hasattr(self, 'duniterpy'):
                 self.duniterpy_from_ed25519()
             self.duniterpy.save_private_key(self.output)
         elif self.format == 'pb2':
-            if not hasattr(self, 'ed25519_secret_protobuf2'):
-                self.protobuf2_from_ed25519()
+            if not hasattr(self, 'ed25519_secret_protobuf'):
+                self.protobuf_from_ed25519()
             with open(self.output, "wb") as fh:
-                fh.write(self.ed25519_secret_protobuf2)
+                fh.write(self.ed25519_secret_protobuf)
         elif self.format == 'pubsec':
             if not hasattr(self, 'duniterpy'):
                 self.duniterpy_from_ed25519()
@@ -305,27 +304,65 @@ class keygen:
         method = getattr(self, f'do_{self.type}', self._invalid_type)
         return method()
 
+    def b58mh_from_protobuf(self):
+        log.debug("keygen.b58mh_from_protobuf()")
+        try:
+            self.ed25519_public_b58mh = base58.b58encode(self.ed25519_public_protobuf).decode('ascii')
+            self.ed25519_secret_b58mh = base58.b58encode(self.ed25519_secret_protobuf).decode('ascii')
+        except Exception as e:
+            log.error(f'Unable to get b58mh from protobuf: {e}')
+            self._cleanup()
+            exit(2)
+        log.debug("keygen.ed25519_public_b58mh=%s" % self.ed25519_public_b58mh)
+        log.debug("keygen.ed25519_secret_b58mh=%s" % self.ed25519_secret_b58mh)
+
+    def b64mh_from_protobuf(self):
+        log.debug("keygen.b64mh_from_protobuf()")
+        try:
+            self.ed25519_public_b64mh = base64.b64encode(self.ed25519_public_protobuf).decode('ascii')
+            self.ed25519_secret_b64mh = base64.b64encode(self.ed25519_secret_protobuf).decode('ascii')
+        except Exception as e:
+            log.error(f'Unable to get b64mh from protobuf: {e}')
+            self._cleanup()
+            exit(2)
+        log.debug("keygen.ed25519_public_b64mh=%s" % self.ed25519_public_b64mh)
+        log.debug("keygen.ed25519_secret_b64mh=%s" % self.ed25519_secret_b64mh)
+
     def base58_from_ed25519(self):
         log.debug("keygen.base58_from_ed25519()")
-        self.ed25519_public_base58 = base58.b58encode(self.ed25519_public_bytes).decode('ascii')
+        try:
+            self.ed25519_public_base58 = base58.b58encode(self.ed25519_public_bytes).decode('ascii')
+            self.ed25519_secret_base58 = base58.b58encode(self.ed25519_secret_bytes).decode('ascii')
+        except Exception as e:
+            log.error(f'Unable to get base58 from ed25519: {e}')
+            self._cleanup()
+            exit(2)
         log.debug("keygen.ed25519_public_base58=%s" % self.ed25519_public_base58)
-        self.ed25519_secret_base58 = base58.b58encode(self.ed25519_secret_bytes).decode('ascii')
         log.debug("keygen.ed25519_secret_base58=%s" % self.ed25519_secret_base58)
 
     def base64_from_ed25519(self):
         log.debug("keygen.base64_from_ed25519()")
-        self.ed25519_public_base64 = base64.b64encode(self.ed25519_public_bytes).decode('ascii')
+        try:
+            self.ed25519_public_base64 = base64.b64encode(self.ed25519_public_bytes).decode('ascii')
+            self.ed25519_secret_base64 = base64.b64encode(self.ed25519_secret_bytes).decode('ascii')
+        except Exception as e:
+            log.error(f'Unable to get base64 from ed25519: {e}')
+            self._cleanup()
+            exit(2)
         log.debug("keygen.ed25519_public_base64=%s" % self.ed25519_public_base64)
-        self.ed25519_secret_base64 = base64.b64encode(self.ed25519_secret_bytes).decode('ascii')
         log.debug("keygen.ed25519_secret_base64=%s" % self.ed25519_secret_base64)
 
-    def base58_from_pubsec(self):
-        log.debug("keygen.base58_from_pubsec()")
-        for line in open(self.input, "r"):
-            if re.search("pub", line):
-                self.ed25519_public_base58 = line.replace('\n','').split(': ')[1]
-            elif re.search("sec", line):
-                self.ed25519_secret_base58 = line.replace('\n','').split(': ')[1]
+    def do_b58mh(self):
+        log.debug("keygen.do_b58mh()")
+        self.protobuf_from_ed25519()
+        self.b58mh_from_protobuf()
+        self._output(self.ed25519_public_b58mh, self.ed25519_secret_b58mh, 'pub: ', 'sec: ')
+
+    def do_b64mh(self):
+        log.debug("keygen.do_b64mh()")
+        self.protobuf_from_ed25519()
+        self.b64mh_from_protobuf()
+        self._output(self.ed25519_public_b64mh, self.ed25519_secret_b64mh, 'pub: ', 'sec: ')
 
     def do_base58(self):
         log.debug("keygen.do_base58()")
@@ -338,44 +375,57 @@ class keygen:
         self._output(self.ed25519_public_base64, self.ed25519_secret_base64, 'pub: ', 'sec: ')
 
     def do_duniter(self):
+        log.debug("keygen.do_duniter()")
         if not self.format:
             self.format = 'pubsec'
-        self.do_base58()
+        self.base58_from_ed25519()
+        self._output(self.ed25519_public_base58, self.ed25519_secret_base58, 'pub: ', 'sec: ')
 
     def do_ipfs(self):
         log.debug("keygen.do_ipfs()")
-        self.protobuf2_from_ed25519()
-        self.ipfs_from_protobuf2()
-        self._output(self.ipfs_peerid, self.ipfs_privkey, 'PeerID: ', 'PrivKEY: ')
+        self.protobuf_from_ed25519()
+        self.b58mh_from_protobuf()
+        self.b64mh_from_protobuf()
+        self._output(self.ed25519_public_b58mh, self.ed25519_secret_b64mh, 'PeerID: ', 'PrivKEY: ')
 
     def duniterpy_from_credentials(self):
         log.debug("keygen.duniterpy_from_credentials()")
-        scrypt_params = duniterpy.key.scrypt_params.ScryptParams(
-            int(self.config.get('scrypt', 'n')) if self.config.has_option('scrypt', 'n') else 4096,
-            int(self.config.get('scrypt', 'r')) if self.config.has_option('scrypt', 'r') else 16,
-            int(self.config.get('scrypt', 'p')) if self.config.has_option('scrypt', 'p') else 1,
-            int(self.config.get('scrypt', 'sl')) if self.config.has_option('scrypt', 'sl') else 32,
-        )
-        if not self.password:
-            with pynentry.PynEntry() as p:
-                p.description = f"""Please enter the passord for username "{self.username}"."""
-                p.prompt = 'Passsord:'
-                try:
-                    self.password = p.get_pin()
-                except pynentry.PinEntryCancelled:
-                    log.warning('Cancelled! Goodbye.')
-                    self._cleanup()
-                    exit(2)
-        self.duniterpy = duniterpy.key.SigningKey.from_credentials(
-            self.username,
-            self.password,
-            scrypt_params
-        )
+        try:
+            scrypt_params = duniterpy.key.scrypt_params.ScryptParams(
+                int(self.config.get('scrypt', 'n')) if self.config.has_option('scrypt', 'n') else 4096,
+                int(self.config.get('scrypt', 'r')) if self.config.has_option('scrypt', 'r') else 16,
+                int(self.config.get('scrypt', 'p')) if self.config.has_option('scrypt', 'p') else 1,
+                int(self.config.get('scrypt', 'sl')) if self.config.has_option('scrypt', 'sl') else 32,
+            )
+            if not self.password:
+                with pynentry.PynEntry() as p:
+                    p.description = f"""Please enter the passord for username "{self.username}"."""
+                    p.prompt = 'Passsord:'
+                    try:
+                        self.password = p.get_pin()
+                    except pynentry.PinEntryCancelled:
+                        log.warning('Cancelled! Goodbye.')
+                        self._cleanup()
+                        exit(1)
+            self.duniterpy = duniterpy.key.SigningKey.from_credentials(
+                self.username,
+                self.password,
+                scrypt_params
+            )
+        except Exception as e:
+            log.error(f'Unable to get duniter from credentials: {e}')
+            self._cleanup()
+            exit(2)
         log.debug("keygen.duniterpy.seed: %s" % self.duniterpy.seed)
 
     def duniterpy_from_ed25519(self):
         log.debug("keygen.duniterpy_from_ed25519()")
-        self.duniterpy = duniterpy.key.SigningKey(self.ed25519_secret_bytes[:32])
+        try:
+            self.duniterpy = duniterpy.key.SigningKey(self.ed25519_seed_bytes)
+        except Exception as e:
+            log.error(f'Unable to get duniterpy from ed25519: {e}')
+            self._cleanup()
+            exit(2)
         log.debug("keygen.duniterpy.seed: %s" % self.duniterpy.seed)
 
     def duniterpy_from_file(self):
@@ -405,17 +455,15 @@ class keygen:
                                 except pynentry.PinEntryCancelled:
                                     log.warning('Cancelled! Goodbye.')
                                     self._cleanup()
-                                    exit(2)
+                                    exit(1)
                         self.duniterpy = duniterpy.key.SigningKey.from_ewif_file(self.input, self.password)
                     elif re.search(regex_nacl, line):
                         log.info("input file format detected: nacl")
                         self.duniterpy = duniterpy.key.SigningKey.from_private_key(self.input)
                     elif re.search(regex_pem, line):
                         log.info("input file format detected: pem")
-                        self.ed25519_secret_bytes = serialization.load_pem_private_key(''.join(lines).encode(), password=None).private_bytes(encoding=serialization.Encoding.Raw, format=serialization.PrivateFormat.Raw, encryption_algorithm=serialization.NoEncryption())
+                        self.ed25519_seed_bytes = serialization.load_pem_private_key(''.join(lines).encode(), password=None).private_bytes(encoding=serialization.Encoding.Raw, format=serialization.PrivateFormat.Raw, encryption_algorithm=serialization.NoEncryption())
                         self.duniterpy_from_ed25519()
-                        ## at this stage, self.ed25519_secret_bytes contains only the 32 seed bytes and not the 32 seed bytes + 32 public bytes as it should
-                        # we need to call self.ed25519_from_duniterpy() later to correctly build the self.ed25519_secret_bytes
                     elif re.search(regex_pubsec, line):
                         log.info("input file format detected: pubsec")
                         self.duniterpy = duniterpy.key.SigningKey.from_pubsec_file(self.input)
@@ -438,25 +486,52 @@ class keygen:
                         self.password = lines[1].strip()
                         self.duniterpy_from_credentials()
                     else:
-                        raise NotImplementedError(f"""unable to detect input file format.""")
+                        raise NotImplementedError('unknown input file format.')
+                else:
+                    raise NotImplementedError('empty file.')
+        except UnicodeDecodeError as e:
+            try:
+                with open(self.input, 'rb') as file:
+                    lines = file.readlines()
+                    if len(lines) > 0:
+                        line = lines[0].strip()
+                        regex_pb2 = re.compile(b'^\x08\x01\x12@')
+                        if re.search(regex_pb2, line):
+                            log.info("input file format detected: pb2")
+                            self.ed25519_secret_protobuf = line
+                            self.ed25519_from_protobuf()
+                            self.duniterpy_from_ed25519()
+                        else:
+                            raise NotImplementedError('unknown input file format.')
+                    else:
+                        raise NotImplementedError('empty file.')
+            except Exception as e:
+                log.error(f'Unable to get duniterpy from file {self.input}: {e}')
+                self._cleanup()
+                exit(2)
         except Exception as e:
-            log.error(f"""Unable to open file {self.input}: {e}""")
+            log.error(f'Unable to get duniterpy from file {self.input}: {e}')
             self._cleanup()
-            exit(1)
+            exit(2)
         log.debug("keygen.duniterpy.seed: %s" % self.duniterpy.seed)
 
     def duniterpy_from_mnemonic(self):
         log.debug("keygen.duniterpy_from_mnemonic()")
-        scrypt_params = duniterpy.key.scrypt_params.ScryptParams(
-            int(self.config.get('scrypt', 'n')) if self.config.has_option('scrypt', 'n') else 4096,
-            int(self.config.get('scrypt', 'r')) if self.config.has_option('scrypt', 'r') else 16,
-            int(self.config.get('scrypt', 'p')) if self.config.has_option('scrypt', 'p') else 1,
-            int(self.config.get('scrypt', 'sl')) if self.config.has_option('scrypt', 'sl') else 32,
-        )
-        self.duniterpy = duniterpy.key.SigningKey.from_dubp_mnemonic(
-            self.username,
-            scrypt_params
-        )
+        try:
+            scrypt_params = duniterpy.key.scrypt_params.ScryptParams(
+                int(self.config.get('scrypt', 'n')) if self.config.has_option('scrypt', 'n') else 4096,
+                int(self.config.get('scrypt', 'r')) if self.config.has_option('scrypt', 'r') else 16,
+                int(self.config.get('scrypt', 'p')) if self.config.has_option('scrypt', 'p') else 1,
+                int(self.config.get('scrypt', 'sl')) if self.config.has_option('scrypt', 'sl') else 32,
+            )
+            self.duniterpy = duniterpy.key.SigningKey.from_dubp_mnemonic(
+                self.username,
+                scrypt_params
+            )
+        except Exception as e:
+            log.error(f'Unable to get duniterpy from mnemonic: {e}')
+            self._cleanup()
+            exit(2)
         log.debug("keygen.duniterpy.seed: %s" % self.duniterpy.seed)
 
     def ed25519(self, args):
@@ -473,130 +548,163 @@ class keygen:
                     self.duniterpy_from_credentials()
             self.ed25519_from_duniterpy()
 
-    def ed25519_from_base58(self):
-        log.debug("keygen.ed25519_from_base58()")
-        self.ed25519_public_bytes = base58.b58decode(self.ed25519_public_base58)
-        self.ed25519_secret_bytes = base58.b58decode(self.ed25519_secret_base58)
-        log.debug("keygen.ed25519_public_bytes=%s" % self.ed25519_public_bytes)
-        log.debug("keygen.ed25519_secret_bytes=%s" % self.ed25519_secret_bytes)
-
     def ed25519_from_duniterpy(self):
         log.debug("keygen.ed25519_from_duniterpy()")
-        self.ed25519_public_bytes = base58.b58decode(self.duniterpy.pubkey)
-        self.ed25519_secret_bytes = self.duniterpy.sk
+        try:
+            self.ed25519_public_bytes = base58.b58decode(self.duniterpy.pubkey)
+            self.ed25519_secret_bytes = self.duniterpy.sk
+            self.ed25519_seed_bytes = self.ed25519_secret_bytes[:32]
+        except Exception as e:
+            log.error(f'Unable to get ed25519 from duniterpy: {e}')
+            self._cleanup()
+            exit(2)
+        log.debug("keygen.ed25519_seed_bytes=%s" % self.ed25519_seed_bytes)
         log.debug("keygen.ed25519_public_bytes=%s" % self.ed25519_public_bytes)
         log.debug("keygen.ed25519_secret_bytes=%s" % self.ed25519_secret_bytes)
 
     def ed25519_from_gpg(self):
         log.debug("keygen.ed25519_from_gpg()")
-        self.pgpy_from_gpg()
-        self.ed25519_from_pgpy()
-
-    def pgpy_from_gpg(self):
-        log.debug("keygen.pgpy_from_gpg()")
-        self.gpg_seckeys = list(self.gpg.keylist(pattern=self.username, secret=True))
-        log.debug("keygen.gpg_seckeys=%s" % self.gpg_seckeys)
-        if not self.gpg_seckeys:
-            log.error(f"""Unable to find any key matching username "{self.username}".""")
-            self._cleanup()
-            exit(1)
-        else:
-            self.gpg_seckey = self.gpg_seckeys[0]
-            log.info(f"""Found key id "{self.gpg_seckey.fpr}" matching username "{self.username}".""")
-        log.debug("keygen.gpg_seckey.expired=%s" % self.gpg_seckey.expired)
-        log.debug("keygen.gpg_seckey.fpr=%s" % self.gpg_seckey.fpr)
-        log.debug("keygen.gpg_seckey.revoked=%s" % self.gpg_seckey.revoked)
-        log.debug("keygen.gpg_seckey.uids=%s" % self.gpg_seckey.uids)
-        log.debug("keygen.gpg_seckey.owner_trust=%s" % self.gpg_seckey.owner_trust)
-        log.debug("keygen.gpg_seckey.last_update=%s" % self.gpg_seckey.last_update)
-        if self.password:
-            self.gpg.set_pinentry_mode(gpg.constants.PINENTRY_MODE_LOOPBACK)
-        self.pgp_secret_armored = self.gpg.key_export_secret(self.gpg_seckey.fpr)
-        log.debug("keygen.pgp_secret_armored=%s" % self.pgp_secret_armored)
-        if not self.pgp_secret_armored:
-            log.error(f"""Unable to export gpg secret key id "{self.gpg_seckey.fpr}" of user "{self.username}". Please check your password!""")
+        try:
+            self.pgpy_from_gpg()
+            self.ed25519_from_pgpy()
+        except Exception as e:
+            log.error(f'Unable to get ed25519 from pgp: {e}')
             self._cleanup()
             exit(2)
-        with warnings.catch_warnings():
-            # remove CryptographyDeprecationWarning about deprecated
-            # SymmetricKeyAlgorithm IDEA, CAST5 and Blowfish (PGPy v0.5.4)
-            warnings.simplefilter('ignore')
-            self.pgpy, _ = pgpy.PGPKey.from_blob(self.pgp_secret_armored)
 
     def ed25519_from_pgpy(self):
         log.debug("keygen.ed25519_from_pgpy()")
-        log.debug("keygen.pgpy.fingerprint.keyid=%s" % self.pgpy.fingerprint.keyid)
-        log.debug("keygen.pgpy.is_protected=%s" % self.pgpy.is_protected)
-        if self.pgpy.is_protected:
-            if not self.password:
-                with pynentry.PynEntry() as p:
-                    p.description = f"""The exported pgp key id "{self.pgpy.fingerprint.keyid}" of user "{self.username}" is password protected.
-                    Please enter the passphrase again to unlock it.
-                    """
-                    p.prompt = 'Passphrase:'
-                    try:
-                        self.password = p.get_pin()
-                    except pynentry.PinEntryCancelled:
-                        log.warning('Cancelled! Goodbye.')
-                        self._cleanup()
-                        exit(2)
-            try:
-                with warnings.catch_warnings():
-                    # remove CryptographyDeprecationWarning about deprecated
-                    # SymmetricKeyAlgorithm IDEA, CAST5 and Blowfish (PGPy v0.5.4)
-                    warnings.simplefilter('ignore')
-                    with self.pgpy.unlock(self.password):
-                        assert self.pgpy.is_unlocked
-                        log.debug("keygen.pgpy.is_unlocked=%s" % self.pgpy.is_unlocked)
-                        self.ed25519_seed_bytes_from_pgpy()
-            except Exception as e:
-                log.error(f"""Unable to unlock pgp secret key id "{self.pgpy.fingerprint.keyid}" of user "{self.username}". Please check your password!""")
-                self._cleanup()
-                exit(2)
-        else:
-            self.ed25519_seed_bytes_from_pgpy()
-        self.ed25519_public_bytes, self.ed25519_secret_bytes = nacl.bindings.crypto_sign_seed_keypair(self.ed25519_seed_bytes)
+        try:
+            log.debug("keygen.pgpy.fingerprint.keyid=%s" % self.pgpy.fingerprint.keyid)
+            log.debug("keygen.pgpy.is_protected=%s" % self.pgpy.is_protected)
+            if self.pgpy.is_protected:
+                if not self.password:
+                    with pynentry.PynEntry() as p:
+                        p.description = f"""The exported pgp key id "{self.pgpy.fingerprint.keyid}" of user "{self.username}" is password protected.
+                        Please enter the passphrase again to unlock it.
+                        """
+                        p.prompt = 'Passphrase:'
+                        try:
+                            self.password = p.get_pin()
+                        except pynentry.PinEntryCancelled:
+                            log.warning('Cancelled! Goodbye.')
+                            self._cleanup()
+                            exit(1)
+                try:
+                    with warnings.catch_warnings():
+                        # remove CryptographyDeprecationWarning about deprecated
+                        # SymmetricKeyAlgorithm IDEA, CAST5 and Blowfish (PGPy v0.5.4)
+                        warnings.simplefilter('ignore')
+                        with self.pgpy.unlock(self.password):
+                            assert self.pgpy.is_unlocked
+                            log.debug("keygen.pgpy.is_unlocked=%s" % self.pgpy.is_unlocked)
+                            self.ed25519_seed_bytes_from_pgpy()
+                except Exception as e:
+                    log.error(f"""Unable to unlock pgp secret key id "{self.pgpy.fingerprint.keyid}" of user "{self.username}": {e}""")
+                    self._cleanup()
+                    exit(2)
+            else:
+                self.ed25519_seed_bytes_from_pgpy()
+            self.ed25519_from_seed_bytes()
+        except Exception as e:
+            log.error(f'Unable to get ed25519 from pgpy: {e}')
+            self._cleanup()
+            exit(2)
+
+    def ed25519_from_protobuf(self):
+        log.debug("keygen.ed25519_from_protobuf()")
+        try:
+            self.ed25519_secret_bytes = self.ed25519_secret_protobuf.lstrip(b'\x08\x01\x12@')
+            self.ed25519_seed_bytes = self.ed25519_secret_bytes[:32]
+            self.ed25519_public_bytes = self.ed25519_secret_bytes.lstrip(self.ed25519_seed_bytes)
+        except Exception as e:
+            log.error(f'Unable to get ed25519 from protobuf: {e}')
+            self._cleanup()
+            exit(2)
+        log.debug("keygen.ed25519_seed_bytes=%s" % self.ed25519_seed_bytes)
+        log.debug("keygen.ed25519_public_bytes=%s" % self.ed25519_public_bytes)
+        log.debug("keygen.ed25519_secret_bytes=%s" % self.ed25519_secret_bytes)
+
+    def ed25519_from_seed_bytes(self):
+        log.debug("keygen.ed25519_from_seed_bytes()")
+        try:
+            self.ed25519_public_bytes, self.ed25519_secret_bytes = nacl.bindings.crypto_sign_seed_keypair(self.ed25519_seed_bytes)
+        except Exception as e:
+            log.error(f'Unable to get ed25519 from seed bytes: {e}')
+            self._cleanup()
+            exit(2)
         log.debug("keygen.ed25519_public_bytes=%s" % self.ed25519_public_bytes)
         log.debug("keygen.ed25519_secret_bytes=%s" % self.ed25519_secret_bytes)
 
     def ed25519_seed_bytes_from_pgpy(self):
         log.debug("keygen.ed25519_seed_bytes_from_pgpy()")
-        self.pgpy_key_type()
-        if self.pgpy_key_type == 'RSA':
-            log.debug("keygen.pgpy._key.keymaterial.p=%s" % self.pgpy._key.keymaterial.p)
-            log.debug("keygen.pgpy._key.keymaterial.q=%s" % self.pgpy._key.keymaterial.q)
-            # custom seed: use sha256 hash of (p + q)
-            self.ed25519_seed_bytes = nacl.bindings.crypto_hash_sha256(long_to_bytes(self.pgpy._key.keymaterial.p + self.pgpy._key.keymaterial.q))
-            p = long_to_bytes(self.pgpy._key.keymaterial.p)
-            q = long_to_bytes(self.pgpy._key.keymaterial.q)
-            log.debug("keygen.ed25519_seed_bytes=%s" % self.ed25519_seed_bytes)
-        elif self.pgpy_key_type in ('ECDSA', 'EdDSA', 'ECDH'):
-            log.debug("keygen.pgpy._key.keymaterial.s=%s" % self.pgpy._key.keymaterial.s)
-            self.ed25519_seed_bytes = long_to_bytes(self.pgpy._key.keymaterial.s)
-            log.debug("keygen.ed25519_seed_bytes=%s" % self.ed25519_seed_bytes)
-        else:
-            raise NotImplementedError(f"Getting seed from {self.pgpy_key_type} key is not implemented")
+        try:
+            self.pgpy_key_type()
+            if self.pgpy_key_type == 'RSA':
+                log.debug("keygen.pgpy._key.keymaterial.p=%s" % self.pgpy._key.keymaterial.p)
+                log.debug("keygen.pgpy._key.keymaterial.q=%s" % self.pgpy._key.keymaterial.q)
+                # custom seed: use sha256 hash of (p + q)
+                self.ed25519_seed_bytes = nacl.bindings.crypto_hash_sha256(long_to_bytes(self.pgpy._key.keymaterial.p + self.pgpy._key.keymaterial.q))
+            elif self.pgpy_key_type in ('ECDSA', 'EdDSA', 'ECDH'):
+                log.debug("keygen.pgpy._key.keymaterial.s=%s" % self.pgpy._key.keymaterial.s)
+                self.ed25519_seed_bytes = long_to_bytes(self.pgpy._key.keymaterial.s)
+            else:
+                raise NotImplementedError(f"Getting seed from {self.pgpy_key_type} key is not implemented")
+        except Exception as e:
+            log.error(f'Unable to get ed25519 seed bytes from pgpy: {e}')
+            self._cleanup()
+            exit(2)
+        log.debug("keygen.ed25519_seed_bytes=%s" % self.ed25519_seed_bytes)
 
     def gpg_passphrase_cb(self, uid_hint, passphrase_info, prev_was_bad):
         log.debug("keygen.gpg_passphrase_cb(%s, %s, %s)" % (uid_hint, passphrase_info, prev_was_bad))
         return self.password
 
-    def ipfs_from_protobuf2(self):
-        log.debug("keygen.ipfs_from_protobuf2()")
-
-        # PeerID
-        self.ipfs_peerid = base58.b58encode(self.ed25519_public_protobuf2).decode('ascii')
-        log.debug("keygen.ipfs_peerid=%s" % self.ipfs_peerid)
-
-        # PrivKey
-        self.ipfs_privkey = base64.b64encode(self.ed25519_secret_protobuf2).decode('ascii')
-        log.debug("keygen.ipfs_privkey=%s" % self.ipfs_privkey)
-
     def pem_pkcs8_from_ed25519(self):
         log.debug("keygen.pem_pkcs8_from_ed25519()")
-
-        self.ed25519_secret_pem_pkcs8 = ed25519.Ed25519PrivateKey.from_private_bytes(self.ed25519_secret_bytes[:32]).private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=serialization.NoEncryption()).decode('ascii')
+        try:
+            self.ed25519_secret_pem_pkcs8 = ed25519.Ed25519PrivateKey.from_private_bytes(self.ed25519_seed_bytes).private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=serialization.NoEncryption()).decode('ascii')
+        except Exception as e:
+            log.error(f'Unable to get pem pkcs8 from ed25519: {e}')
+            self._cleanup()
+            exit(2)
         log.debug("keygen.ed25519_secret_pem_pkcs8=%s" % self.ed25519_secret_pem_pkcs8)
+
+    def pgpy_from_gpg(self):
+        log.debug("keygen.pgpy_from_gpg()")
+        try:
+            self.gpg_seckeys = list(self.gpg.keylist(pattern=self.username, secret=True))
+            log.debug("keygen.gpg_seckeys=%s" % self.gpg_seckeys)
+            if not self.gpg_seckeys:
+                log.warning(f"""Unable to find any key matching username "{self.username}".""")
+                self._cleanup()
+                exit(1)
+            else:
+                self.gpg_seckey = self.gpg_seckeys[0]
+                log.info(f"""Found key id "{self.gpg_seckey.fpr}" matching username "{self.username}".""")
+            log.debug("keygen.gpg_seckey.expired=%s" % self.gpg_seckey.expired)
+            log.debug("keygen.gpg_seckey.fpr=%s" % self.gpg_seckey.fpr)
+            log.debug("keygen.gpg_seckey.revoked=%s" % self.gpg_seckey.revoked)
+            log.debug("keygen.gpg_seckey.uids=%s" % self.gpg_seckey.uids)
+            log.debug("keygen.gpg_seckey.owner_trust=%s" % self.gpg_seckey.owner_trust)
+            log.debug("keygen.gpg_seckey.last_update=%s" % self.gpg_seckey.last_update)
+            if self.password:
+                self.gpg.set_pinentry_mode(gpg.constants.PINENTRY_MODE_LOOPBACK)
+            self.pgp_secret_armored = self.gpg.key_export_secret(self.gpg_seckey.fpr)
+            log.debug("keygen.pgp_secret_armored=%s" % self.pgp_secret_armored)
+            if not self.pgp_secret_armored:
+                log.error(f"""Unable to export gpg secret key id "{self.gpg_seckey.fpr}" of user "{self.username}". Please check your password!""")
+                self._cleanup()
+                exit(2)
+            with warnings.catch_warnings():
+                # remove CryptographyDeprecationWarning about deprecated
+                # SymmetricKeyAlgorithm IDEA, CAST5 and Blowfish (PGPy v0.5.4)
+                warnings.simplefilter('ignore')
+                self.pgpy, _ = pgpy.PGPKey.from_blob(self.pgp_secret_armored)
+        except Exception as e:
+            log.error(f'Unable to get pgpy from gpg: {e}')
+            self._cleanup()
+            exit(2)
 
     def pgpy_key_type(self):
         log.debug("keygen.pgpy_key_type()")
@@ -616,13 +724,18 @@ class keygen:
             self.pgpy_key_type = 'undefined'
         log.debug("keygen.pgpy_key_type=%s" % self.pgpy_key_type)
 
-    def protobuf2_from_ed25519(self):
+    def protobuf_from_ed25519(self):
         # libp2p protobuf version 2
-        log.debug("keygen.protobuf2_from_ed25519()")
-        self.ed25519_public_protobuf2 = b'\x00$\x08\x01\x12 ' + self.ed25519_public_bytes
-        self.ed25519_secret_protobuf2 = b'\x08\x01\x12@' + self.ed25519_secret_bytes
-        log.debug("keygen.ed25519_public_protobuf2=%s" % self.ed25519_public_protobuf2)
-        log.debug("keygen.ed25519_secret_protobuf2=%s" % self.ed25519_secret_protobuf2)
+        log.debug("keygen.protobuf_from_ed25519()")
+        try:
+            self.ed25519_public_protobuf = b'\x00$\x08\x01\x12 ' + self.ed25519_public_bytes
+            self.ed25519_secret_protobuf = b'\x08\x01\x12@' + self.ed25519_secret_bytes
+        except Exception as e:
+            log.error(f'Unable to get protobuf from ed25519: {e}')
+            self._cleanup()
+            exit(2)
+        log.debug("keygen.ed25519_public_protobuf=%s" % self.ed25519_public_protobuf)
+        log.debug("keygen.ed25519_secret_protobuf=%s" % self.ed25519_secret_protobuf)
 
 ##
 # long_to_bytes comes from PyCrypto, which is released into Public Domain

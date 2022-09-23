@@ -3,14 +3,14 @@ set -eu
 
 CRED_FILE="${SHELLSPEC_TMPBASE}/credentials"
 DUBP_FILE="${SHELLSPEC_TMPBASE}/mnemonic"
-EWIF_FILE="${SHELLSPEC_TMPBASE}/ed25519.ewif"
-NACL_FILE="${SHELLSPEC_TMPBASE}/ed25519.nacl"
-PB2_FILE="${SHELLSPEC_TMPBASE}/ed25519.pb2"
-PEM_FILE="${SHELLSPEC_TMPBASE}/ed25519.pem"
-PUBSEC_FILE="${SHELLSPEC_TMPBASE}/ed25519.pubsec"
-SEED_FILE="${SHELLSPEC_TMPBASE}/ed25519.seed"
-SSB_FILE="${SHELLSPEC_TMPBASE}/ed25519.ssb"
-WIF_FILE="${SHELLSPEC_TMPBASE}/ed25519.wif"
+EWIF_FILE="${SHELLSPEC_TMPBASE}/username.ewif"
+NACL_FILE="${SHELLSPEC_TMPBASE}/username.nacl"
+PB2_FILE="${SHELLSPEC_TMPBASE}/username.pb2"
+PEM_FILE="${SHELLSPEC_TMPBASE}/username.pem"
+PUBSEC_FILE="${SHELLSPEC_TMPBASE}/username.pubsec"
+SEED_FILE="${SHELLSPEC_TMPBASE}/username.seed"
+SSB_FILE="${SHELLSPEC_TMPBASE}/username.ssb"
+WIF_FILE="${SHELLSPEC_TMPBASE}/username.wif"
 
 gpg() {
   GNUPGHOME="${SHELLSPEC_TMPBASE}" command gpg "$@"
@@ -112,36 +112,54 @@ Describe 'keygen'
       The stderr should equal ""
     End
   End
-  Describe '-t base58 -pk username password:'
+  Describe '-pkt b58mh username password:'
+    It 'prints prefixed base58 multihash public and secret keys for user "username" and password "password"'
+      When run keygen -pkt b58mh username password
+      The output should include 'pub: 12D3KooWDMhdm5yrvtrbkshXFjkqLedHieUnPioczy9wzdnzquHC'
+      The output should include 'sec: 23jhTarm17VAHUwPkHD2Kv5sPfuQrsXSZUzKUrRkP2oP8bgnLjVExhG4AVoayCLxbXN4g2pjVG5qiJRucUtogbj7zGapz'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-pkt b64mh username password:'
+    It 'prints prefixed base64 multihash public and secret keys for user "username" and password "password"'
+      When run keygen -pkt b64mh username password
+      The output should include 'pub: ACQIARIgNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
+      The output should include 'sec: CAESQA+XqCWjRqCjNe9oU3QA796bEH+T+rxgyPQ/EkXvE2MvNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-pkt base58 username password:'
     It 'prints prefixed base58 public and secret keys for user "username" and password "password"'
-      When run keygen -t base58 -pk username password
+      When run keygen -pkt base58 username password
       The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
       The status should be success
       The stderr should equal ""
     End
   End
-  Describe '-t base64 -pk username password:'
+  Describe '-pkt base64 username password:'
     It 'prints prefixed base64 public and secret keys for user "username" and password "password"'
-      When run keygen -t base64 -pk username password
+      When run keygen -pkt base64 username password
       The output should include 'pub: NJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
       The output should include 'sec: D5eoJaNGoKM172hTdADv3psQf5P6vGDI9D8SRe8TYy80mhNu9w/6bnX5fDGuZaodo6kjVkPRRLAuOoCZXwGhqw=='
       The status should be success
       The stderr should equal ""
     End
   End
-  Describe '-t duniter -pk username password:'
+  Describe '-pkt duniter username password:'
     It 'prints prefixed duniter public and secret keys for user "username" and password "password"'
-      When run keygen -t duniter -pk username password
+      When run keygen -pkt duniter username password
       The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
       The status should be success
       The stderr should equal ""
     End
   End
-  Describe '-t ipfs -pk username password:'
+  Describe '-pkt ipfs username password:'
     It 'prints prefixed ipfs public and secret keys for user "username" and password "password"'
-      When run keygen -t ipfs -pk username password
+      When run keygen -pkt ipfs username password
       The output should include 'PeerID: 12D3KooWDMhdm5yrvtrbkshXFjkqLedHieUnPioczy9wzdnzquHC'
       The output should include 'PrivKEY: CAESQA+XqCWjRqCjNe9oU3QA796bEH+T+rxgyPQ/EkXvE2MvNJoTbvcP+m51+XwxrmWqHaOpI1ZD0USwLjqAmV8Boas='
       The status should be success
@@ -272,6 +290,15 @@ Describe 'keygen'
       The result of function decode_pb2 should include '2e3a80995f01a1ab'
       The status should be success
       The stderr should equal ""
+    End
+  End
+  Describe "-pki ${PB2_FILE}:"
+    It 'prints prefixed base58 public and secret keys for ed25519 key read from pb2 file"'
+      When run keygen -pki "${PB2_FILE}" -v
+      The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should include 'input file format detected: pb2'
     End
     rm -f "${PB2_FILE}"
   End
