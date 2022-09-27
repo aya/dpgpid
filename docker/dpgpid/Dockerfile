@@ -8,9 +8,20 @@ ARG PROCESSOR_ARCHITECTURE=$(uname -m)
 ARG PYTHON_RELEASE=3.10
 
 WORKDIR /opt/dpgpid
-COPY requirements.txt ./
+
 RUN apk upgrade --no-cache \
- && apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/ --virtual .build-deps \
+ && apk add --no-cache \
+    bash \
+    ca-certificates \
+    gettext \
+    gpg \
+    gpg-agent \
+    libc6-compat \
+    libsodium \
+    make
+
+COPY requirements.txt ./
+RUN apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/ --virtual .build-deps \
     build-base \
     libffi-dev \
     py3-gpgme \
@@ -27,16 +38,7 @@ RUN apk upgrade --no-cache \
      |awk 'system("[ -e /lib/"$1" -o -e /usr/lib/"$1" -o -e ./lib/python'"${PYTHON_RELEASE}"'/site-packages/*/"$1" ]") == 0 { next } { print "so:" $1 }' \
      |xargs -rt apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/
 
-RUN apk add --no-cache \
-    bash \
-    ca-certificates \
-    gettext \
-    gpg \
-    gpg-agent \
-    libc6-compat \
-    libsodium \
-    make \
- && OS="$(echo ${OPERATING_SYSTEM} |awk '{print tolower($0)}')"; \
+RUN OS="$(echo ${OPERATING_SYSTEM} |awk '{print tolower($0)}')"; \
     ARCH="$(echo ${PROCESSOR_ARCHITECTURE})"; \
     wget -qO - https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.${OS}.${ARCH}.tar.xz \
      |tar --strip-components 1 -C ./bin -xJf - \

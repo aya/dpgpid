@@ -4,6 +4,7 @@ set -eu
 CRED_FILE="${SHELLSPEC_TMPBASE}/credentials"
 DUBP_FILE="${SHELLSPEC_TMPBASE}/mnemonic"
 EWIF_FILE="${SHELLSPEC_TMPBASE}/username.ewif"
+JWK_FILE="${SHELLSPEC_TMPBASE}/username.jwk"
 NACL_FILE="${SHELLSPEC_TMPBASE}/username.nacl"
 PB2_FILE="${SHELLSPEC_TMPBASE}/username.pb2"
 PEM_FILE="${SHELLSPEC_TMPBASE}/username.pem"
@@ -57,7 +58,7 @@ Describe 'keygen'
   Describe '--version:'
     It 'prints version'
       When run keygen --version
-      The output should include 'v0.0.4'
+      The output should include 'v0.0.5'
       The status should be success
       The stderr should equal ""
     End
@@ -166,6 +167,15 @@ Describe 'keygen'
       The stderr should equal ""
     End
   End
+  Describe '-pkt jwk username password:'
+    It 'prints prefixed jwk public and secret keys for user "username" and password "password"'
+      When run keygen -pkt jwk username password
+      The output should include 'pub: {"crv":"Ed25519","kty":"OKP","x":"NJoTbvcP-m51-XwxrmWqHaOpI1ZD0USwLjqAmV8Boas"}'
+      The output should include 'sec: {"crv":"Ed25519","d":"D5eoJaNGoKM172hTdADv3psQf5P6vGDI9D8SRe8TYy8","kty":"OKP","x":"NJoTbvcP-m51-XwxrmWqHaOpI1ZD0USwLjqAmV8Boas"}'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
   Describe '-pkm "tongue cute mail ...":'
     It 'prints prefixed base58 public and secret keys for mnemonic "tongue cute mail ..."'
       When run keygen -pkm "tongue cute mail fossil great frozen same social weasel impact brush kind"
@@ -196,6 +206,26 @@ Describe 'keygen'
       The stderr should include 'input file format detected: mnemonic'
     End
     rm -f "${DUBP_FILE}"
+  End
+  Describe "-f jwk -o ${JWK_FILE} username password:"
+    rm -f "${JWK_FILE}"
+    It 'writes secret key to a JWK file for user "username" and password "password"'
+      When run keygen -f jwk -o "${JWK_FILE}" username password
+      The path "${JWK_FILE}" should exist
+      The contents of file "${JWK_FILE}" should include '{"crv":"Ed25519","d":"D5eoJaNGoKM172hTdADv3psQf5P6vGDI9D8SRe8TYy8","kty":"OKP","x":"NJoTbvcP-m51-XwxrmWqHaOpI1ZD0USwLjqAmV8Boas"}'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe "-pki ${JWK_FILE}:"
+    It 'prints prefixed base58 public and secret keys for ed25519 key read from JWK file"'
+      When run keygen -pki "${JWK_FILE}" -v
+      The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
+      The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should include 'input file format detected: jwk'
+    End
+    rm -f "${JWK_FILE}"
   End
   Describe "-f nacl -o ${NACL_FILE} username password:"
     rm -f "${NACL_FILE}"
@@ -277,7 +307,7 @@ Describe 'keygen'
     rm -f "${PB2_FILE}"
     It 'writes protobuf2 secret key to a pb2 file for user "username" and password "password"'
       decode_pb2() {
-        xxd -ps "${PB2_FILE}"
+        xxd -p "${PB2_FILE}"
       }
       not_xxd() {
         ! which xxd >/dev/null 2>&1
