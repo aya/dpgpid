@@ -18,8 +18,8 @@ gpg() {
 }
 
 keygen() {
-  if [ -x ./keygen ]; then
-    GNUPGHOME="${SHELLSPEC_TMPBASE}" ./keygen "$@"
+  if [ -x ./keygen.py ]; then
+    GNUPGHOME="${SHELLSPEC_TMPBASE}" ./keygen.py "$@"
   elif [ -x ./bin/keygen ]; then
     GNUPGHOME="${SHELLSPEC_TMPBASE}" ./bin/keygen "$@"
   else

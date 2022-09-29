@@ -182,6 +182,9 @@ class keygen:
             clearmem(self.ipfs_privkey)
             log.debug("cleared: keygen.ipfs_privkey")
         if hasattr(self, 'jwk'):
+            if hasattr(self, 'ed25519_secret_jwk') and self.ed25519_secret_jwk:
+                clearmem(self.ed25519_secret_jwk)
+                log.debug("cleared: keygen.ed25519_secret_jwk")
             if hasattr(self.jwk, 'd') and self.jwk.d:
                 clearmem(self.jwk.d)
                 log.debug("cleared: keygen.jwk.d")
@@ -330,7 +333,7 @@ class keygen:
         self._load_config()
         self.gpg = gpg.Context(armor=True, offline=True)
         self.gpg.set_passphrase_cb(self.gpg_passphrase_cb)
-        self.ed25519(args)
+        self.ed25519_from(args)
         method = getattr(self, f'do_{self.type}', self._invalid_type)
         return method()
 
@@ -421,7 +424,7 @@ class keygen:
     def do_jwk(self):
         log.debug("keygen.do_jwk()")
         self.jwk_from_ed25519()
-        self._output(self.jwk.export_public(), self.jwk.export_private(), 'pub: ', 'sec: ')
+        self._output(self.ed25519_public_jwk, self.ed25519_secret_jwk, 'pub: ', 'sec: ')
 
     def duniterpy_from_credentials(self):
         log.debug("keygen.duniterpy_from_credentials()")
@@ -591,8 +594,8 @@ class keygen:
             exit(2)
         log.debug("keygen.duniterpy.seed: %s" % self.duniterpy.seed)
 
-    def ed25519(self, args):
-        log.debug("keygen.ed25519(%s)" % args)
+    def ed25519_from(self, args):
+        log.debug("keygen.ed25519_from(%s)" % args)
         if args.gpg:
             self.ed25519_from_gpg()
         else:
@@ -742,6 +745,8 @@ class keygen:
         log.debug("keygen.jwk_from_ed25519()")
         try:
             self.jwk = jwk.JWK.from_pyca(self.ed25519)
+            self.ed25519_public_jwk = self.jwk.export_public()
+            self.ed25519_secret_jwk = self.jwk.export_private()
         except Exception as e:
             log.error(f'Unable to get jwk from ed25519: {e}')
             self._cleanup()
@@ -769,28 +774,28 @@ class keygen:
     def pgpy_from_gpg(self):
         log.debug("keygen.pgpy_from_gpg()")
         try:
-            self.gpg_seckeys = list(self.gpg.keylist(pattern=self.username, secret=True))
-            log.debug("keygen.gpg_seckeys=%s" % self.gpg_seckeys)
-            if not self.gpg_seckeys:
-                log.warning(f"""Unable to find any key matching username "{self.username}".""")
+            self.gpg_secret_keys = list(self.gpg.keylist(pattern=self.username, secret=True))
+            log.debug("keygen.gpg_secret_keys=%s" % self.gpg_secret_keys)
+            if not self.gpg_secret_keys:
+                log.warning(f"""Unable to find any key matching "{self.username}".""")
                 self._cleanup()
                 exit(1)
             else:
-                self.gpg_seckey = self.gpg_seckeys[0]
-                log.info(f"""Found key id "{self.gpg_seckey.fpr}" matching username "{self.username}".""")
-            log.debug("keygen.gpg_seckey.expired=%s" % self.gpg_seckey.expired)
-            log.debug("keygen.gpg_seckey.fpr=%s" % self.gpg_seckey.fpr)
-            log.debug("keygen.gpg_seckey.revoked=%s" % self.gpg_seckey.revoked)
-            log.debug("keygen.gpg_seckey.uids=%s" % self.gpg_seckey.uids)
-            log.debug("keygen.gpg_seckey.owner_trust=%s" % self.gpg_seckey.owner_trust)
-            log.debug("keygen.gpg_seckey.last_update=%s" % self.gpg_seckey.last_update)
+                self.gpg_secret_key = self.gpg_secret_keys[0]
+                log.info(f"""Found key id "{self.gpg_secret_key.fpr}" matching "{self.username}".""")
+            log.debug("keygen.gpg_secret_key.expired=%s" % self.gpg_secret_key.expired)
+            log.debug("keygen.gpg_secret_key.fpr=%s" % self.gpg_secret_key.fpr)
+            log.debug("keygen.gpg_secret_key.revoked=%s" % self.gpg_secret_key.revoked)
+            log.debug("keygen.gpg_secret_key.uids=%s" % self.gpg_secret_key.uids)
+            log.debug("keygen.gpg_secret_key.owner_trust=%s" % self.gpg_secret_key.owner_trust)
+            log.debug("keygen.gpg_secret_key.last_update=%s" % self.gpg_secret_key.last_update)
             if self.password:
                 self.gpg.set_pinentry_mode(gpg.constants.PINENTRY_MODE_LOOPBACK)
-            self.pgp_public_armor = self.gpg.key_export(self.gpg_seckey.fpr)
-            self.pgp_secret_armor = self.gpg.key_export_secret(self.gpg_seckey.fpr)
+            self.pgp_public_armor = self.gpg.key_export(self.gpg_secret_key.fpr)
+            self.pgp_secret_armor = self.gpg.key_export_secret(self.gpg_secret_key.fpr)
             log.debug("keygen.pgp_secret_armor=%s" % self.pgp_secret_armor)
             if not self.pgp_secret_armor:
-                log.error(f"""Unable to export gpg secret key id "{self.gpg_seckey.fpr}" of user "{self.username}". Please check your password!""")
+                log.error(f"""Unable to export gpg secret key id "{self.gpg_secret_key.fpr}" of user "{self.username}". Please check your password!""")
                 self._cleanup()
                 exit(2)
             with warnings.catch_warnings():

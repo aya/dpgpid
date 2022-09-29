@@ -20,7 +20,7 @@
 set -eu
 
 DATE=$(date -u +%FT%TZ%Z)
-USAGE='[--help] [--version] show'
+USAGE='[--help] [--version] list'
 VERSION='0.0.1'
 
 dpgpid() {
@@ -39,8 +39,8 @@ dpgpid() {
     -*)
       usage
       ;;
-    show)
-      show
+    list)
+      list
       ;;
     *)
       break
@@ -54,8 +54,11 @@ help() {
   usage
 }
 
-show() {
-  gpg --list-keys --with-colons |awk -F: '$1 == "pub" {print "did:pgp:"$5}'
+list() {
+  gpg --list-secret-keys --with-colons |awk -F: '$1 == "sec" {print $5}' |while read key; do
+    id=$(keygen -t ipfs -g ${key} 2>/dev/null) && printf "did:ipid:${id}\n" ||
+      echo "ERROR: Unable to extract id from key ${key}"
+  done
 }
 
 usage() {
