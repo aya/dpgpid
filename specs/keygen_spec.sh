@@ -6,7 +6,7 @@ DUBP_FILE="${SHELLSPEC_TMPBASE}/mnemonic"
 EWIF_FILE="${SHELLSPEC_TMPBASE}/username.ewif"
 JWK_FILE="${SHELLSPEC_TMPBASE}/username.jwk"
 NACL_FILE="${SHELLSPEC_TMPBASE}/username.nacl"
-PB2_FILE="${SHELLSPEC_TMPBASE}/username.pb2"
+P2P_FILE="${SHELLSPEC_TMPBASE}/username.p2p"
 PEM_FILE="${SHELLSPEC_TMPBASE}/username.pem"
 PUBSEC_FILE="${SHELLSPEC_TMPBASE}/username.pubsec"
 SEED_FILE="${SHELLSPEC_TMPBASE}/username.seed"
@@ -109,6 +109,24 @@ Describe 'keygen'
       When run keygen -pk username password
       The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-pkt b36mf username password:'
+    It 'prints prefixed base36 multiformat public and secret keys for user "username" and password "password"'
+      When run keygen -pkt b36mf username password
+      The output should include 'pub: k51qzi5uqu5dhhsbw068pust1xf763zdmyu2mb8rf6ewu2oz3in3a2g6pgtqy3'
+      The output should include 'sec: kmxn88f5mep5chc4tc002gyhtl9vgiluellgje285y2hn5a5kjdvqge7oeb0jryupt1q09w48h2nxg0ofcjco0wjwa824v3p9tvw6us9gdkb'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
+  Describe '-pkt b58mf username password:'
+    It 'prints prefixed base58 multiformat public and secret keys for user "username" and password "password"'
+      When run keygen -pkt b58mf username password
+      The output should include 'pub: z5AanNVJCxnJNiidpTZyuYzkQcrHRCyhxMV7Z4KYDV1MYy2ETMrEbUn'
+      The output should include 'sec: z4gg7xjCuszBpvNVcDAmNYVNrZxwXfDDQGoAShWmmQBkWRzZbR8A4ZBpkk4iTj3YSLBxvGZRf1AjCyGDdczhs7tshCsbFK4e'
       The status should be success
       The stderr should equal ""
     End
@@ -303,34 +321,34 @@ Describe 'keygen'
     End
     rm -f "${PEM_FILE}"
   End
-  Describe "-f pb2 -o ${PB2_FILE} username password:"
-    rm -f "${PB2_FILE}"
-    It 'writes protobuf2 secret key to a pb2 file for user "username" and password "password"'
-      decode_pb2() {
-        xxd -p "${PB2_FILE}"
+  Describe "-f p2p -o ${P2P_FILE} username password:"
+    rm -f "${P2P_FILE}"
+    It 'writes libp2p secret key to a p2p file for user "username" and password "password"'
+      decode_p2p() {
+        xxd -p "${P2P_FILE}"
       }
       not_xxd() {
         ! which xxd >/dev/null 2>&1
       }
       Skip if 'You should install xxd' not_xxd
-      When run keygen -f pb2 -o "${PB2_FILE}" username password
-      The path "${PB2_FILE}" should exist
-      The result of function decode_pb2 should include '080112400f97a825a346a0a335ef68537400efde9b107f93fabc60c8f43f'
-      The result of function decode_pb2 should include '1245ef13632f349a136ef70ffa6e75f97c31ae65aa1da3a9235643d144b0'
-      The result of function decode_pb2 should include '2e3a80995f01a1ab'
+      When run keygen -f p2p -o "${P2P_FILE}" username password
+      The path "${P2P_FILE}" should exist
+      The result of function decode_p2p should include '080112400f97a825a346a0a335ef68537400efde9b107f93fabc60c8f43f'
+      The result of function decode_p2p should include '1245ef13632f349a136ef70ffa6e75f97c31ae65aa1da3a9235643d144b0'
+      The result of function decode_p2p should include '2e3a80995f01a1ab'
       The status should be success
       The stderr should equal ""
     End
   End
-  Describe "-pki ${PB2_FILE}:"
-    It 'prints prefixed base58 public and secret keys for ed25519 key read from pb2 file"'
-      When run keygen -pki "${PB2_FILE}" -v
+  Describe "-pki ${P2P_FILE}:"
+    It 'prints prefixed base58 public and secret keys for ed25519 key read from p2p file"'
+      When run keygen -pki "${P2P_FILE}" -v
       The output should include 'pub: 4YLU1xQ9jzb7LzC6d91VZrYTEKS9N2j93Nnvcee6wxZG'
       The output should include 'sec: K5heSX4xGUPtRbxcZh6zbgaKbDv8FeVc9JuSNWtUs7C1oGNKqv7kQJ3DHdouTPzoW4duKKnuLQK8LbHKfN9fkjC'
       The status should be success
-      The stderr should include 'input file format detected: pb2'
+      The stderr should include 'input file format detected: p2p'
     End
-    rm -f "${PB2_FILE}"
+    rm -f "${P2P_FILE}"
   End
   Describe "-f pubsec -o ${PUBSEC_FILE} username password:"
     rm -f "${PUBSEC_FILE}"
@@ -454,8 +472,8 @@ Describe 'keygen'
     gpg --batch --import --quiet specs/usersame.asc
     It 'prints prefixed base58 public and secret keys for rsa gpg key matching uid "usersame"'
       When run keygen -pkg usersame
-      The output should include 'pub: 4NxSjjys6bo8mhM919MkvNkNPFu4zpFyxu1r7yJ39K87'
-      The output should include 'sec: 2cLFNeXiqcKKv5BF9JVTwtWmFHLvjDkJkrCyQbST9oYbsQLHsVaUAzbwrv5YfzQcPHu6e6XUzdstKy4kLhgDSGiw'
+      The output should include 'pub: EGdSY9fKom7MnvHALNQU7LUoEEE2sju5ntL9eRXJ5tTM'
+      The output should include 'sec: 4jPG9MH9LVA7HhcfFs41pXVjxDQLdgu3Mtc64Ph6U3vUMNWfJqTBdFFaviq5r6zJC8PpWUiaUhjVnYAa2E9UrFTZ'
       The status should be success
       The stderr should equal ""
     End
@@ -465,8 +483,8 @@ Describe 'keygen'
     gpg --batch --import --quiet specs/usersame_protected.asc
     It 'prints prefixed public and secret keys for rsa gpg key matching uid "usersame@protected" and locked with password "password"'
       When run keygen -pkg usersame@protected password
-      The output should include 'pub: 5kh2uqNTuYsLN7fwSRP3JWM4Hotcpdkb7frRNZwo9BPp'
-      The output should include 'sec: LdWjjkP7gRzH4k4gNkQs2er26bE2Dhz7cGPE8fMNixe1Uv2ZHbo1QtyZxmDeTP77y6HVLbHNoXdMTHdo6ip9PHk'
+      The output should include 'pub: 6KNNPBxkMYnccYvpePBKDewZ3JiQnmWA4e7QSsvZUzLM'
+      The output should include 'sec: 4q4SM9qoWc2eLtfYWs7K9hb7oSCNjCLc8U6ELNrScteVGVnSBP4YMDM5V8RPsHURqCqP5ndPkqGoB74cmRxfJro7'
       The status should be success
       The stderr should equal ""
     End

@@ -24,6 +24,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import argparse
+import base36
 import base58
 import base64
 import configparser
@@ -62,7 +63,7 @@ class keygen:
         self.parser.add_argument(
             "-f",
             "--format",
-            choices=['ewif', 'jwk', 'nacl','pb2','pem','pubsec','seed','wif'],
+            choices=['ewif', 'jwk', 'nacl','p2p','pem','pubsec','seed','wif'],
             default=None,
             dest="format",
             help="output file format, default: pem (pkcs8)",
@@ -77,7 +78,7 @@ class keygen:
             "-i",
             "--input",
             dest="input",
-            help="read ed25519 key from file FILE, autodetect format: {credentials,ewif,jwk,nacl,mnemonic,pb2,pubsec,seed,wif}",
+            help="read ed25519 key from file FILE, autodetect format: {credentials,ewif,jwk,nacl,mnemonic,p2p,pem,pubsec,seed,wif}",
             metavar='FILE',
         )
         self.parser.add_argument(
@@ -121,7 +122,7 @@ class keygen:
         self.parser.add_argument(
             "-t",
             "--type",
-            choices=['b58mh','b64mh','base58','base64','duniter','ipfs','jwk'],
+            choices=['b36mf', 'b58mf', 'b58mh','b64mh','base58','base64','duniter','ipfs','jwk'],
             default="base58",
             dest="type",
             help="output text format, default: base58",
@@ -160,6 +161,18 @@ class keygen:
             if hasattr(self.duniterpy, 'sk') and self.duniterpy.sk:
                 clearmem(self.duniterpy.sk)
                 log.debug("cleared: keygen.duniterpy.sk")
+        if hasattr(self, 'ed25519_secret_b36mf') and self.ed25519_secret_b36mf:
+            clearmem(self.ed25519_secret_b36mf)
+            log.debug("cleared: keygen.ed25519_secret_b36mf")
+        if hasattr(self, 'ed25519_secret_b58mf') and self.ed25519_secret_b58mf:
+            clearmem(self.ed25519_secret_b58mf)
+            log.debug("cleared: keygen.ed25519_secret_b58mf")
+        if hasattr(self, 'ed25519_secret_b58mh') and self.ed25519_secret_b58mh:
+            clearmem(self.ed25519_secret_b58mh)
+            log.debug("cleared: keygen.ed25519_secret_b58mh")
+        if hasattr(self, 'ed25519_secret_b64mh') and self.ed25519_secret_b64mh:
+            clearmem(self.ed25519_secret_b64mh)
+            log.debug("cleared: keygen.ed25519_secret_b64mh")
         if hasattr(self, 'ed25519_secret_base58') and self.ed25519_secret_base58:
             clearmem(self.ed25519_secret_base58)
             log.debug("cleared: keygen.ed25519_secret_base58")
@@ -169,12 +182,15 @@ class keygen:
         if hasattr(self, 'ed25519_secret_bytes') and self.ed25519_secret_bytes:
             clearmem(self.ed25519_secret_bytes)
             log.debug("cleared: keygen.ed25519_secret_bytes")
+        if hasattr(self, 'ed25519_secret_cidv1') and self.ed25519_secret_cidv1:
+            clearmem(self.ed25519_secret_cidv1)
+            log.debug("cleared: keygen.ed25519_secret_cidv1")
         if hasattr(self, 'ed25519_secret_pem_pkcs8') and self.ed25519_secret_pem_pkcs8:
             clearmem(self.ed25519_secret_pem_pkcs8)
             log.debug("cleared: keygen.ed25515_secret_pem_pkcs8")
-        if hasattr(self, 'ed25519_secret_protobuf') and self.ed25519_secret_protobuf:
-            clearmem(self.ed25519_secret_protobuf)
-            log.debug("cleared: keygen.ed25515_secret_protobuf")
+        if hasattr(self, 'ed25519_secret_libp2p') and self.ed25519_secret_libp2p:
+            clearmem(self.ed25519_secret_libp2p)
+            log.debug("cleared: keygen.ed25515_secret_libp2p")
         if hasattr(self, 'ed25519_seed_bytes') and self.ed25519_seed_bytes:
             clearmem(self.ed25519_seed_bytes)
             log.debug("cleared: keygen.ed25519_seed_bytes")
@@ -207,6 +223,37 @@ class keygen:
         if hasattr(self, 'username') and self.username:
             clearmem(self.username)
             log.debug("cleared: keygen.username")
+
+    def _cli(self, argv):
+        args = self.parser.parse_args(argv)
+        vars(self).update(vars(args))
+
+        # display version
+        if args.version:
+            version()
+            sys.exit()
+
+        # define log format
+        log_format='%(asctime)s %(levelname)s: %(message)s'
+        log_datefmt='%Y/%m/%d %H:%M:%S'
+        if args.debug:
+            log_level='DEBUG'
+        elif args.quiet:
+            log_level='ERROR'
+        elif args.verbose:
+            log_level='INFO'
+        else:
+            log_level='WARNING'
+        log.basicConfig(format=log_format, datefmt=log_datefmt, level=log_level)
+        log.debug("keygen.run(%s)" % argv)
+
+        self._check_args(args)
+        self._load_config()
+        self.gpg = gpg.Context(armor=True, offline=True)
+        self.gpg.set_passphrase_cb(self.gpg_passphrase_cb)
+        self.ed25519_from(args)
+        method = getattr(self, f'do_{self.type}', self._invalid_type)
+        return method()
 
     def _invalid_type(self):
         log.debug("keygen._invalid_type()")
@@ -272,11 +319,11 @@ class keygen:
                 if not hasattr(self, 'duniterpy'):
                     self.duniterpy_from_ed25519_seed_bytes()
                 self.duniterpy.save_private_key(self.output)
-            elif self.format == 'pb2':
-                if not hasattr(self, 'ed25519_secret_protobuf'):
-                    self.protobuf_from_ed25519()
+            elif self.format == 'p2p':
+                if not hasattr(self, 'ed25519_secret_libp2p'):
+                    self.libp2p_from_ed25519()
                 with open(self.output, "wb") as file:
-                    file.write(self.ed25519_secret_protobuf)
+                    file.write(self.ed25519_secret_libp2p)
             elif self.format == 'pubsec':
                 if not hasattr(self, 'duniterpy'):
                     self.duniterpy_from_ed25519_seed_bytes()
@@ -306,56 +353,57 @@ class keygen:
         if self.keys or self.secret:
             print("%s" % ''.join([self.prefix * secret_key_prefix, secret_key]))
 
-    def _run(self, argv):
-        args = self.parser.parse_args(argv)
-        vars(self).update(vars(args))
-
-        # display version
-        if args.version:
-            version()
-            sys.exit()
-
-        # define log format
-        log_format='%(asctime)s %(levelname)s: %(message)s'
-        log_datefmt='%Y/%m/%d %H:%M:%S'
-        if args.debug:
-            log_level='DEBUG'
-        elif args.quiet:
-            log_level='ERROR'
-        elif args.verbose:
-            log_level='INFO'
-        else:
-            log_level='WARNING'
-        log.basicConfig(format=log_format, datefmt=log_datefmt, level=log_level)
-        log.debug("keygen.run(%s)" % argv)
-
-        self._check_args(args)
-        self._load_config()
-        self.gpg = gpg.Context(armor=True, offline=True)
-        self.gpg.set_passphrase_cb(self.gpg_passphrase_cb)
-        self.ed25519_from(args)
-        method = getattr(self, f'do_{self.type}', self._invalid_type)
-        return method()
-
-    def b58mh_from_protobuf(self):
-        log.debug("keygen.b58mh_from_protobuf()")
+    def b36mf_from_cidv1(self):
+        log.debug("keygen.b36mf_from_cidv1()")
+        if not hasattr(self, 'ed25519_public_cidv1') or not hasattr(self, 'ed25519_secret_cidv1'):
+            self.cidv1_from_libp2p()
         try:
-            self.ed25519_public_b58mh = base58.b58encode(self.ed25519_public_protobuf).decode('ascii')
-            self.ed25519_secret_b58mh = base58.b58encode(self.ed25519_secret_protobuf).decode('ascii')
+            self.ed25519_public_b36mf = 'k' + base36.dumps(int.from_bytes(self.ed25519_public_cidv1, byteorder='big'))
+            self.ed25519_secret_b36mf = 'k' + base36.dumps(int.from_bytes(self.ed25519_secret_cidv1, byteorder='big'))
         except Exception as e:
-            log.error(f'Unable to get b58mh from protobuf: {e}')
+            log.error(f'Unable to get b36mf from cidv1: {e}')
+            self._cleanup()
+            exit(2)
+        log.debug("keygen.ed25519_public_b36mf=%s" % self.ed25519_public_b36mf)
+        log.debug("keygen.ed25519_secret_b36mf=%s" % self.ed25519_secret_b36mf)
+
+    def b58mf_from_cidv1(self):
+        log.debug("keygen.b58mf_from_cidv1()")
+        if not hasattr(self, 'ed25519_public_cidv1') or not hasattr(self, 'ed25519_secret_cidv1'):
+            self.cidv1_from_libp2p()
+        try:
+            self.ed25519_public_b58mf = 'z' + base58.b58encode(self.ed25519_public_cidv1).decode('ascii')
+            self.ed25519_secret_b58mf = 'z' + base58.b58encode(self.ed25519_secret_cidv1).decode('ascii')
+        except Exception as e:
+            log.error(f'Unable to get b58mf from cidv1: {e}')
+            self._cleanup()
+            exit(2)
+        log.debug("keygen.ed25519_public_b58mf=%s" % self.ed25519_public_b58mf)
+        log.debug("keygen.ed25519_secret_b58mf=%s" % self.ed25519_secret_b58mf)
+
+    def b58mh_from_libp2p(self):
+        log.debug("keygen.b58mh_from_libp2p()")
+        if not hasattr(self, 'ed25519_public_libp2p') or not hasattr(self, 'ed25519_secret_libp2p'):
+            self.libp2p_from_ed25519()
+        try:
+            self.ed25519_public_b58mh = base58.b58encode(self.ed25519_public_libp2p).decode('ascii')
+            self.ed25519_secret_b58mh = base58.b58encode(self.ed25519_secret_libp2p).decode('ascii')
+        except Exception as e:
+            log.error(f'Unable to get b58mh from libp2p: {e}')
             self._cleanup()
             exit(2)
         log.debug("keygen.ed25519_public_b58mh=%s" % self.ed25519_public_b58mh)
         log.debug("keygen.ed25519_secret_b58mh=%s" % self.ed25519_secret_b58mh)
 
-    def b64mh_from_protobuf(self):
-        log.debug("keygen.b64mh_from_protobuf()")
+    def b64mh_from_libp2p(self):
+        log.debug("keygen.b64mh_from_libp2p()")
+        if not hasattr(self, 'ed25519_public_libp2p') or not hasattr(self, 'ed25519_secret_libp2p'):
+            self.libp2p_from_ed25519()
         try:
-            self.ed25519_public_b64mh = base64.b64encode(self.ed25519_public_protobuf).decode('ascii')
-            self.ed25519_secret_b64mh = base64.b64encode(self.ed25519_secret_protobuf).decode('ascii')
+            self.ed25519_public_b64mh = base64.b64encode(self.ed25519_public_libp2p).decode('ascii')
+            self.ed25519_secret_b64mh = base64.b64encode(self.ed25519_secret_libp2p).decode('ascii')
         except Exception as e:
-            log.error(f'Unable to get b64mh from protobuf: {e}')
+            log.error(f'Unable to get b64mh from libp2p: {e}')
             self._cleanup()
             exit(2)
         log.debug("keygen.ed25519_public_b64mh=%s" % self.ed25519_public_b64mh)
@@ -385,16 +433,46 @@ class keygen:
         log.debug("keygen.ed25519_public_base64=%s" % self.ed25519_public_base64)
         log.debug("keygen.ed25519_secret_base64=%s" % self.ed25519_secret_base64)
 
+    def cidv1_from_libp2p(self):
+        log.debug("keygen.cidv1_from_libp2p()")
+        if not hasattr(self, 'ed25519_public_libp2p') or not hasattr(self, 'ed25519_secret_libp2p'):
+            self.libp2p_from_ed25519()
+        try:
+            # \x01: multicodec cid prefix = CIDv1
+            # \x72: multicodec content prefix = libp2p-key
+            self.ed25519_public_cidv1 = b'\x01\x72' + self.ed25519_public_libp2p
+            self.ed25519_secret_cidv1 = b'\x01\x72' + self.ed25519_secret_libp2p
+        except Exception as e:
+            log.error(f'Unable to get cidv1 from libp2p: {e}')
+            self._cleanup()
+            exit(2)
+        log.debug("keygen.ed25519_public_cidv1=%s" % self.ed25519_public_cidv1)
+        log.debug("keygen.ed25519_secret_cidv1=%s" % self.ed25519_secret_cidv1)
+
+    def do_b36mf(self):
+        log.debug("keygen.do_b36mf()")
+        self.libp2p_from_ed25519()
+        self.cidv1_from_libp2p()
+        self.b36mf_from_cidv1()
+        self._output(self.ed25519_public_b36mf, self.ed25519_secret_b36mf, 'pub: ', 'sec: ')
+
+    def do_b58mf(self):
+        log.debug("keygen.do_b58mf()")
+        self.libp2p_from_ed25519()
+        self.cidv1_from_libp2p()
+        self.b58mf_from_cidv1()
+        self._output(self.ed25519_public_b58mf, self.ed25519_secret_b58mf, 'pub: ', 'sec: ')
+
     def do_b58mh(self):
         log.debug("keygen.do_b58mh()")
-        self.protobuf_from_ed25519()
-        self.b58mh_from_protobuf()
+        self.libp2p_from_ed25519()
+        self.b58mh_from_libp2p()
         self._output(self.ed25519_public_b58mh, self.ed25519_secret_b58mh, 'pub: ', 'sec: ')
 
     def do_b64mh(self):
         log.debug("keygen.do_b64mh()")
-        self.protobuf_from_ed25519()
-        self.b64mh_from_protobuf()
+        self.libp2p_from_ed25519()
+        self.b64mh_from_libp2p()
         self._output(self.ed25519_public_b64mh, self.ed25519_secret_b64mh, 'pub: ', 'sec: ')
 
     def do_base58(self):
@@ -416,9 +494,9 @@ class keygen:
 
     def do_ipfs(self):
         log.debug("keygen.do_ipfs()")
-        self.protobuf_from_ed25519()
-        self.b58mh_from_protobuf()
-        self.b64mh_from_protobuf()
+        self.libp2p_from_ed25519()
+        self.b58mh_from_libp2p()
+        self.b64mh_from_libp2p()
         self._output(self.ed25519_public_b58mh, self.ed25519_secret_b64mh, 'PeerID: ', 'PrivKEY: ')
 
     def do_jwk(self):
@@ -540,7 +618,7 @@ class keygen:
                     if len(lines) > 0:
                         line = lines[0].strip()
                         regex_dewif = re.compile(b'^\x00\x00\x00\x01\x00\x00\x00\x01')
-                        regex_pb2 = re.compile(b'^\x08\x01\x12@')
+                        regex_p2p = re.compile(b'^\x08\x01\x12@')
                         if re.search(regex_dewif, line):
                             log.info("input file format detected: dewif")
                             if not self.password:
@@ -556,10 +634,10 @@ class keygen:
                                         self._cleanup()
                                         exit(1)
                             self.duniterpy = duniterpy.key.SigningKey.from_dewif_file(self.input, self.password)
-                        if re.search(regex_pb2, line):
-                            log.info("input file format detected: pb2")
-                            self.ed25519_secret_protobuf = line
-                            self.ed25519_seed_bytes_from_protobuf()
+                        if re.search(regex_p2p, line):
+                            log.info("input file format detected: p2p")
+                            self.ed25519_secret_libp2p = line
+                            self.ed25519_seed_bytes_from_libp2p()
                             self.duniterpy_from_ed25519_seed_bytes()
                         else:
                             raise NotImplementedError('unknown input file format.')
@@ -714,25 +792,27 @@ class keygen:
             if self.pgpy_key_type == 'RSA':
                 log.debug("keygen.pgpy._key.keymaterial.p=%s" % self.pgpy._key.keymaterial.p)
                 log.debug("keygen.pgpy._key.keymaterial.q=%s" % self.pgpy._key.keymaterial.q)
-                # custom seed: use sha256 hash of (p + q)
-                self.ed25519_seed_bytes = nacl.bindings.crypto_hash_sha256(long_to_bytes(self.pgpy._key.keymaterial.p + self.pgpy._key.keymaterial.q))
+                # rsa custom seed: sha256 hash of (p + q), where + is a string concatenation
+                rsa_int = int(str(self.pgpy._key.keymaterial.p) + str(self.pgpy._key.keymaterial.q))
+                rsa_len = (rsa_int.bit_length() + 7) // 8
+                self.ed25519_seed_bytes = nacl.bindings.crypto_hash_sha256((rsa_int).to_bytes(rsa_len,byteorder='big'))
             elif self.pgpy_key_type in ('ECDSA', 'EdDSA', 'ECDH'):
                 log.debug("keygen.pgpy._key.keymaterial.s=%s" % self.pgpy._key.keymaterial.s)
-                self.ed25519_seed_bytes = long_to_bytes(self.pgpy._key.keymaterial.s)
+                self.ed25519_seed_bytes = self.pgpy._key.keymaterial.s.to_bytes(32, byteorder='big')
             else:
-                raise NotImplementedError(f"getting seed from {self.pgpy_key_type} key is not implemented")
+                raise NotImplementedError(f"getting seed from pgp key type {self.pgpy_key_type} is not implemented")
         except Exception as e:
             log.error(f'Unable to get ed25519 seed bytes from pgpy: {e}')
             self._cleanup()
             exit(2)
         log.debug("keygen.ed25519_seed_bytes=%s" % self.ed25519_seed_bytes)
 
-    def ed25519_seed_bytes_from_protobuf(self):
-        log.debug("keygen.ed25519_seed_bytes_from_protobuf()")
+    def ed25519_seed_bytes_from_libp2p(self):
+        log.debug("keygen.ed25519_seed_bytes_from_libp2p()")
         try:
-            self.ed25519_seed_bytes = self.ed25519_secret_protobuf.lstrip(b'\x08\x01\x12@')[:32]
+            self.ed25519_seed_bytes = self.ed25519_secret_libp2p.lstrip(b'\x08\x01\x12@')[:32]
         except Exception as e:
-            log.error(f'Unable to get ed25519 seed bytes from protobuf: {e}')
+            log.error(f'Unable to get ed25519 seed bytes from libp2p: {e}')
             self._cleanup()
             exit(2)
         log.debug("keygen.ed25519_seed_bytes=%s" % self.ed25519_seed_bytes)
@@ -826,73 +906,26 @@ class keygen:
             self.pgpy_key_type = 'undefined'
         log.debug("keygen.pgpy_key_type=%s" % self.pgpy_key_type)
 
-    def protobuf_from_ed25519(self):
+    def libp2p_from_ed25519(self):
         # libp2p protobuf version 2
-        log.debug("keygen.protobuf_from_ed25519()")
+        log.debug("keygen.libp2p_from_ed25519()")
         try:
-            self.ed25519_public_protobuf = b'\x00$\x08\x01\x12 ' + self.ed25519_public_bytes
-            self.ed25519_secret_protobuf = b'\x08\x01\x12@' + self.ed25519_secret_bytes
+            # \x00: multihash prefix = id
+            # \x24: multihash length = 36 bytes
+            self.ed25519_public_libp2p = b'\x00$\x08\x01\x12 ' + self.ed25519_public_bytes
+            self.ed25519_secret_libp2p = b'\x08\x01\x12@' + self.ed25519_secret_bytes
+
         except Exception as e:
-            log.error(f'Unable to get protobuf from ed25519: {e}')
+            log.error(f'Unable to get libp2p from ed25519: {e}')
             self._cleanup()
             exit(2)
-        log.debug("keygen.ed25519_public_protobuf=%s" % self.ed25519_public_protobuf)
-        log.debug("keygen.ed25519_secret_protobuf=%s" % self.ed25519_secret_protobuf)
-
-##
-# long_to_bytes comes from PyCrypto, which is released into Public Domain
-# https://github.com/dlitz/pycrypto/blob/master/lib/Crypto/Util/number.py
-def bytes_to_long(s):
-    """bytes_to_long(string) : long
-    Convert a byte string to a long integer.
-    This is (essentially) the inverse of long_to_bytes().
-    """
-    acc = 0
-    unpack = struct.unpack
-    length = len(s)
-    if length % 4:
-        extra = (4 - length % 4)
-        s = b'\000' * extra + s
-        length = length + extra
-    for i in range(0, length, 4):
-        acc = (acc << 32) + unpack('>I', s[i:i+4])[0]
-    return acc
-
-def long_to_bytes(n, blocksize=0):
-    """long_to_bytes(n:long, blocksize:int) : string
-    Convert a long integer to a byte string.
-    If optional blocksize is given and greater than zero, pad the front of the
-    byte string with binary zeros so that the length is a multiple of
-    blocksize.
-    """
-    # after much testing, this algorithm was deemed to be the fastest
-    s = b''
-    n = int(n)
-    pack = struct.pack
-    while n > 0:
-        s = pack('>I', n & 0xffffffff) + s
-        n = n >> 32
-    # strip off leading zeros
-    for i in range(len(s)):
-        if s[i] != b'\000'[0]:
-            break
-    else:
-        # only happens when n == 0
-        s = b'\000'
-        i = 0
-    s = s[i:]
-    # add back some pad bytes.  this could be done more efficiently w.r.t. the
-    # de-padding being done above, but sigh...
-    if blocksize > 0 and len(s) % blocksize:
-        s = (blocksize - len(s) % blocksize) * b'\000' + s
-    return s
+        log.debug("keygen.ed25519_public_libp2p=%s" % self.ed25519_public_libp2p)
+        log.debug("keygen.ed25519_secret_libp2p=%s" % self.ed25519_secret_libp2p)
 
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
-
-    cli = keygen()
-    return cli._run(argv)
+    return keygen()._cli(argv)
 
 def version(version=__version__):
     print("%s v%s" % (sys.argv[0],version))

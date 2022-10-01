@@ -1,3 +1,4 @@
+base36==0.1.1
 base58==2.1.1
 cryptography==3.4.8
 duniterpy==1.1.0
