@@ -28,13 +28,21 @@ Describe 'Dependency'
       The stderr should equal ""
     End
   End
+  Describe 'python3:'
+    It 'is available'
+      When run python3 --help
+      The output should include 'python3'
+      The status should be success
+      The stderr should equal ""
+    End
+  End
 End
 
 Describe 'dpgpid'
   Describe '--help:'
     It 'prints help'
       When run dpgpid --help
-      The output should include 'Usage:'
+      The output should include 'usage:'
       The status should be success
       The stderr should equal ""
     End
@@ -42,7 +50,7 @@ Describe 'dpgpid'
   Describe '--version:'
     It 'prints version'
       When run dpgpid --version
-      The output should include 'v0.0.1'
+      The output should include 'v0.1.0'
       The status should be success
       The stderr should equal ""
     End

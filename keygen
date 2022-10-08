@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+# link: https://git.p2p.legal/aya/dpgpid/
+# desc: dpgpid builds a decentralized gpg world of trust with did over ipfs
+
+# Copyleft 2022 Yann Autissier <aya@asycn.io>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+import argparse
+import configparser
+import logging as log
+import os
+import sys
+
+from about import __version__
+import key
+
+class keygen:
+    def __init__(self):
+        self.parser = argparse.ArgumentParser(description="""
+        Generate ed25519 keys for duniter and ipfs from gpg.
+        It converts a gpg key, a duniter username/password, or any ed25519 key to
+        a duniter wallet or an IPFS key.""")
+        self.parser.add_argument(
+            "-d",
+            "--debug",
+            action="store_true",
+            help="show debug informations (WARNING: including SECRET KEY)",
+        )
+        self.parser.add_argument(
+            "-f",
+            "--format",
+            choices=['ewif', 'jwk', 'nacl','p2p','pem','pubsec','seed','wif'],
+            default=None,
+            dest="format",
+            help="output file format, default: pem (pkcs8)",
+        )
+        self.parser.add_argument(
+            "-g",
+            "--gpg",
+            action="store_true",
+            help="use gpg key with uid matched by username",
+        )
+        self.parser.add_argument(
+            "-i",
+            "--input",
+            dest="input",
+            help="read ed25519 key from file FILE, autodetect format: {credentials,ewif,jwk,nacl,mnemonic,p2p,pem,pubsec,seed,wif}",
+            metavar='FILE',
+        )
+        self.parser.add_argument(
+            "-k",
+            "--keys",
+            action="store_true",
+            help="show public and secret keys",
+        )
+        self.parser.add_argument(
+            "-m",
+            "--mnemonic",
+            action="store_true",
+            help="use username as a DUBP mnemonic passphrase",
+        )
+        self.parser.add_argument(
+            "-o",
+            "--output",
+            dest="output",
+            default=None,
+            help="write ed25519 key to file FILE",
+            metavar='FILE',
+        )
+        self.parser.add_argument(
+            "-p",
+            "--password",
+            dest="password",
+            help="user password for duniter, gpg key and file encryption",
+        )
+        self.parser.add_argument(
+            "-q",
+            "--quiet",
+            action="store_true",
+            help="show only errors",
+        )
+        self.parser.add_argument(
+            "-s",
+            "--secret",
+            action="store_true",
+            help="show only secret key",
+        )
+        self.parser.add_argument(
+            "-t",
+            "--type",
+            choices=['b36mf', 'b58mf', 'b58mh','b64mh','base58','base64','duniter','ipfs','jwk'],
+            default="base58",
+            dest="type",
+            help="output text format, default: base58",
+        )
+        self.parser.add_argument(
+            "-v",
+            "--verbose",
+            action="store_true",
+            help="show more informations",
+        )
+        self.parser.add_argument(
+            "--version",
+            action="store_true",
+            help="show version and exit",
+        )
+        self.parser.add_argument(
+            'username',
+            help="username, mnemonic or gpg key",
+            nargs="*",
+        )
+
+    def _check_args(self, args):
+        log.debug("keygen._check_args(%s)" % args)
+        if self.input is None and not len(self.username):
+            self.parser.error('keygen requires an input file or a username')
+
+    def _cli(self, argv):
+        args = self.parser.parse_args(argv)
+        vars(self).update(vars(args))
+
+        # display version
+        if args.version:
+            version()
+            sys.exit()
+
+        # define log format
+        log_format='%(asctime)s %(levelname)s: %(message)s'
+        log_datefmt='%Y/%m/%d %H:%M:%S'
+        if args.debug:
+            log_level='DEBUG'
+        elif args.quiet:
+            log_level='ERROR'
+        elif args.verbose:
+            log_level='INFO'
+        else:
+            log_level='WARNING'
+        log.basicConfig(format=log_format, datefmt=log_datefmt, level=log_level)
+        log.debug("keygen._cli(%s)" % argv)
+
+        self._check_args(args)
+        self._load_config()
+        self.key = key.from_args(args, self.config)
+        method = getattr(self, f'do_{self.type}', self._invalid_type)
+        return method()
+
+    def _invalid_type(self):
+        log.debug("keygen._invalid_type()")
+        self.parser.error(f"type {self.type} is not valid.")
+
+    def _load_config(self):
+        log.debug("keygen._load_config()")
+        self.config = configparser.RawConfigParser()
+        config_dir = os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config')), 'dpgpid')
+        log.debug("config_dir=%s" % config_dir)
+        self.config.read( [config_dir + '/keygen.conf'] )
+
+    def _output(self):
+        log.debug("keygen._output()")
+        if self.output is None:
+            self._output_text()
+        else:
+            self._output_file()
+            os.chmod(self.output, 0o600)
+
+    def _output_file(self):
+        log.debug("keygen._output_file()")
+        self.key.to_file(self.output, self.format, self.password)
+
+    def _output_text(self):
+        log.debug("keygen()._output_text()")
+        if self.keys or not self.secret:
+            print("%s" % self.public_key)
+        if self.keys or self.secret:
+            print("%s" % self.secret_key)
+
+    def do_b36mf(self):
+        log.debug("keygen.do_b36mf()")
+        self.key.to_b36mf()
+        self.public_key = self.key.public_b36mf
+        self.secret_key = self.key.secret_b36mf
+        self._output()
+
+    def do_b58mf(self):
+        log.debug("keygen.do_b58mf()")
+        self.key.to_b58mf()
+        self.public_key = self.key.public_b58mf
+        self.secret_key = self.key.secret_b58mf
+        self._output()
+
+    def do_b58mh(self):
+        log.debug("keygen.do_b58mh()")
+        self.key.to_b58mh()
+        self.public_key = self.key.public_b58mh
+        self.secret_key = self.key.secret_b58mh
+        self._output()
+
+    def do_b64mh(self):
+        log.debug("keygen.do_b64mh()")
+        self.key.to_b64mh()
+        self.public_key = self.key.public_b64mh
+        self.secret_key = self.key.secret_b64mh
+        self._output()
+
+    def do_base58(self):
+        log.debug("keygen.do_base58()")
+        self.key.to_base58()
+        self.public_key = self.key.public_base58
+        self.secret_key = self.key.secret_base58
+        self._output()
+
+    def do_base64(self):
+        log.debug("keygen.do_base64()")
+        self.key.to_base64()
+        self.public_key = self.key.public_base64
+        self.secret_key = self.key.secret_base64
+        self._output()
+
+    def do_duniter(self):
+        log.debug("keygen.do_duniter()")
+        if not self.format:
+            self.format = 'pubsec'
+        self.key.to_base58()
+        self.public_key = self.key.public_base58
+        self.secret_key = self.key.secret_base58
+        self._output()
+
+    def do_ipfs(self):
+        log.debug("keygen.do_ipfs()")
+        self.key.to_b58mh()
+        self.key.to_b64mh()
+        self.public_key = self.key.public_b58mh
+        self.secret_key = self.key.secret_b64mh
+        self._output()
+
+    def do_jwk(self):
+        log.debug("keygen.do_jwk()")
+        self.key.to_jwk()
+        self.public_key = self.key.public_jwk
+        self.secret_key = self.key.secret_jwk
+        self._output()
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+    return keygen()._cli(argv)
+
+def version(version=__version__):
+    print("%s v%s" % (sys.argv[0],version))
+
+if __name__ == "__main__":
+    sys.exit(main())
+
