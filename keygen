@@ -123,7 +123,7 @@ class keygen:
         )
 
     def _check_args(self, args):
-        log.debug("keygen._check_args(%s)" % args)
+        log.debug("keygen()._check_args(%s)" % args)
         if self.input is None and not len(self.username):
             self.parser.error('keygen requires an input file or a username')
 
@@ -148,7 +148,7 @@ class keygen:
         else:
             log_level='WARNING'
         log.basicConfig(format=log_format, datefmt=log_datefmt, level=log_level)
-        log.debug("keygen._cli(%s)" % argv)
+        log.debug("keygen()._cli(%s)" % argv)
 
         self._check_args(args)
         self._load_config()
@@ -157,18 +157,18 @@ class keygen:
         return method()
 
     def _invalid_type(self):
-        log.debug("keygen._invalid_type()")
+        log.debug("keygen()._invalid_type()")
         self.parser.error(f"type {self.type} is not valid.")
 
     def _load_config(self):
-        log.debug("keygen._load_config()")
+        log.debug("keygen()._load_config()")
         self.config = configparser.RawConfigParser()
         config_dir = os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config')), 'dpgpid')
         log.debug("config_dir=%s" % config_dir)
         self.config.read( [config_dir + '/keygen.conf'] )
 
     def _output(self):
-        log.debug("keygen._output()")
+        log.debug("keygen()._output()")
         if self.output is None:
             self._output_text()
         else:
@@ -176,7 +176,7 @@ class keygen:
             os.chmod(self.output, 0o600)
 
     def _output_file(self):
-        log.debug("keygen._output_file()")
+        log.debug("keygen()._output_file()")
         self.key.to_file(self.output, self.format, self.password)
 
     def _output_text(self):
@@ -187,49 +187,49 @@ class keygen:
             print("%s" % self.secret_key)
 
     def do_b36mf(self):
-        log.debug("keygen.do_b36mf()")
+        log.debug("keygen().do_b36mf()")
         self.key.to_b36mf()
         self.public_key = self.key.public_b36mf
         self.secret_key = self.key.secret_b36mf
         self._output()
 
     def do_b58mf(self):
-        log.debug("keygen.do_b58mf()")
+        log.debug("keygen().do_b58mf()")
         self.key.to_b58mf()
         self.public_key = self.key.public_b58mf
         self.secret_key = self.key.secret_b58mf
         self._output()
 
     def do_b58mh(self):
-        log.debug("keygen.do_b58mh()")
+        log.debug("keygen().do_b58mh()")
         self.key.to_b58mh()
         self.public_key = self.key.public_b58mh
         self.secret_key = self.key.secret_b58mh
         self._output()
 
     def do_b64mh(self):
-        log.debug("keygen.do_b64mh()")
+        log.debug("keygen().do_b64mh()")
         self.key.to_b64mh()
         self.public_key = self.key.public_b64mh
         self.secret_key = self.key.secret_b64mh
         self._output()
 
     def do_base58(self):
-        log.debug("keygen.do_base58()")
+        log.debug("keygen().do_base58()")
         self.key.to_base58()
         self.public_key = self.key.public_base58
         self.secret_key = self.key.secret_base58
         self._output()
 
     def do_base64(self):
-        log.debug("keygen.do_base64()")
+        log.debug("keygen().do_base64()")
         self.key.to_base64()
         self.public_key = self.key.public_base64
         self.secret_key = self.key.secret_base64
         self._output()
 
     def do_duniter(self):
-        log.debug("keygen.do_duniter()")
+        log.debug("keygen().do_duniter()")
         if not self.format:
             self.format = 'pubsec'
         self.key.to_base58()
@@ -238,7 +238,7 @@ class keygen:
         self._output()
 
     def do_ipfs(self):
-        log.debug("keygen.do_ipfs()")
+        log.debug("keygen().do_ipfs()")
         self.key.to_b58mh()
         self.key.to_b64mh()
         self.public_key = self.key.public_b58mh
@@ -246,7 +246,7 @@ class keygen:
         self._output()
 
     def do_jwk(self):
-        log.debug("keygen.do_jwk()")
+        log.debug("keygen().do_jwk()")
         self.key.to_jwk()
         self.public_key = self.key.public_jwk
         self.secret_key = self.key.secret_jwk
